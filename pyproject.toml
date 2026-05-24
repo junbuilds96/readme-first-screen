@@ -42,6 +42,7 @@ packages = ["src/readme_first_screen"]
 
 [tool.hatch.build.targets.sdist]
 include = [
+  "/readme_first_screen",
   "/src",
   "/tests",
   "/README.md",
