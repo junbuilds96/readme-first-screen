@@ -1,4 +1,6 @@
 import json
+import os
+from pathlib import Path
 import subprocess
 import sys
 
@@ -25,12 +27,19 @@ MIT License. CI runs tests.
 
 
 def run_cli(*args, input_text=None):
+    src_path = str(Path(__file__).resolve().parents[1] / "src")
+    pythonpath = os.environ.get("PYTHONPATH")
+    env = {
+        **os.environ,
+        "PYTHONPATH": src_path if not pythonpath else f"{src_path}{os.pathsep}{pythonpath}",
+    }
     return subprocess.run(
         [sys.executable, "-m", "readme_first_screen", *args],
         input=input_text,
         text=True,
         capture_output=True,
         check=False,
+        env=env,
     )
 
 
@@ -42,6 +51,7 @@ def test_cli_reads_local_file(tmp_path):
 
     assert result.returncode == 0
     assert "README first-screen score:" in result.stdout
+    assert "First screen analyzed: 18/30 lines, 298/2400 chars" in result.stdout
     assert "Section scores:" in result.stdout
     assert result.stderr == ""
 

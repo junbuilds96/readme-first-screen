@@ -7,6 +7,11 @@ def render_human(report: ScoreReport) -> str:
     lines = [
         f"README first-screen score: {report.total_score}/{report.max_score} ({report.grade})",
         f"Source: {report.source}",
+        (
+            "First screen analyzed: "
+            f"{report.first_screen['lines_seen']}/{report.first_screen['line_limit']} lines, "
+            f"{report.first_screen['chars_seen']}/{report.first_screen['char_limit']} chars"
+        ),
         "",
         "Section scores:",
     ]
