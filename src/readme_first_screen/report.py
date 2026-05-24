@@ -46,22 +46,39 @@ def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
         "Badge wall appears before the explanation." in issues
         or metadata.get("badges_before_explanation", 0) >= 4
     )
-    late_or_missing_definition = (
-        "The first screen does not clearly say what the project is." in issues
-        or "The first plain-language explanation starts too late." in issues
-        or metadata.get("first_explanation_line") is None
+    what_is_it_strengths = set(report.categories["what_is_it"].strengths)
+    has_name_and_definition = (
+        "The first screen names the project." in what_is_it_strengths
+        and "The opening explains what the project is." in what_is_it_strengths
     )
-    if badge_wall and late_or_missing_definition:
+    missing_definition = (
+        "The first screen does not clearly say what the project is." in issues
+        or (metadata.get("first_explanation_line") is None and not has_name_and_definition)
+    )
+    late_explanation = (
+        "The first plain-language explanation starts too late." in issues
+        and has_name_and_definition
+    )
+    dense_first_screen = "The first screen is dense or mostly structural markup." in issues
+    if badge_wall and missing_definition:
         candidates.append(
             "Replace the badge wall with a project name and one-sentence definition at the top."
         )
-    elif late_or_missing_definition:
+    elif missing_definition:
         candidates.append(
             "Open with a project name and one-sentence definition before any secondary detail."
+        )
+    elif late_explanation:
+        candidates.append(
+            "Put a one- or two-sentence explanation before badges, screenshots, and tables."
         )
     elif badge_wall:
         candidates.append(
             "Move badges below the opening explanation; keep at most one or two above the fold."
+        )
+    if dense_first_screen and has_name_and_definition:
+        candidates.append(
+            "Use a short intro, short sections, and one compact example before deeper detail."
         )
 
     if (
