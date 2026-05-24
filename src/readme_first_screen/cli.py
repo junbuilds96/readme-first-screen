@@ -48,3 +48,7 @@ def main(argv: list[str] | None = None) -> int:
     else:
         print(render_human(report), end="")
     return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

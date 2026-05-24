@@ -26,7 +26,7 @@ MIT License. CI runs tests.
 """
 
 
-def run_cli(*args, input_text=None):
+def run_cli(*args, input_text=None, module="readme_first_screen"):
     src_path = str(Path(__file__).resolve().parents[1] / "src")
     pythonpath = os.environ.get("PYTHONPATH")
     env = {
@@ -34,7 +34,7 @@ def run_cli(*args, input_text=None):
         "PYTHONPATH": src_path if not pythonpath else f"{src_path}{os.pathsep}{pythonpath}",
     }
     return subprocess.run(
-        [sys.executable, "-m", "readme_first_screen", *args],
+        [sys.executable, "-m", module, *args],
         input=input_text,
         text=True,
         capture_output=True,
@@ -53,6 +53,17 @@ def test_cli_reads_local_file(tmp_path):
     assert "README first-screen score:" in result.stdout
     assert "First screen analyzed: 18/30 lines, 298/2400 chars" in result.stdout
     assert "Section scores:" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_module_invocation_reads_local_file(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli(str(readme), module="readme_first_screen.cli")
+
+    assert result.returncode == 0
+    assert "README first-screen score:" in result.stdout
     assert result.stderr == ""
 
 
