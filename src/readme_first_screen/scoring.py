@@ -57,6 +57,23 @@ VALUE_PATTERNS = (
     r"\binstead of\b",
 )
 
+CURATED_LIST_PATTERNS = (
+    r"\bawesome[-\s][a-z0-9 -]*\b(tools|resources|projects|libraries|apps|services|frameworks|packages|agents|prompts|models|datasets|papers|links|list|collection|directory|catalog|catalogue|index)\b",
+    r"\bcurated\s+(list|collection|directory|catalog)\b",
+    r"\b(list|collection|directory|catalog)\s+of\s+[a-z0-9 ,/&+-]{0,80}\b(tools|resources|projects|libraries)\b",
+    r"\b(tools|resources|projects|libraries)\s+(list|collection|directory|catalog)\b",
+)
+
+LIST_NAVIGATION_PATTERNS = (
+    r"\btable of contents\b",
+    r"\bcontents\b",
+    r"\bcategories\b",
+    r"\bbrowse by\b",
+    r"\bdirectory\b",
+    r"\bindex\b",
+    r"\bhow to use this list\b",
+)
+
 COMMAND_PATTERNS = (
     r"\bpipx?\s+install\b",
     r"\buv\s+(tool\s+)?(run|install)\b",
@@ -321,6 +338,10 @@ def _score_quick_start(facts: ReadmeFacts) -> CategoryScore:
         strengths.append("A runnable command is included.")
         issues.append("The first runnable command appears after the first screen.")
         suggestions.append("Move one install or run command above the fold.")
+    elif _looks_like_curated_list(facts):
+        if not _has_list_navigation_signal(facts):
+            issues.append("The list has no obvious browsing or navigation structure.")
+            suggestions.append("Add a table of contents, categories, or an index for browsing the list.")
     else:
         issues.append("No install or run command was found.")
         suggestions.append("Add a copy-paste install command and one copy-paste run command.")
@@ -556,6 +577,14 @@ def _vague_without_concrete(text: str) -> bool:
 
 def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def _looks_like_curated_list(facts: ReadmeFacts) -> bool:
+    return _matches_any(facts.full_text_plain, CURATED_LIST_PATTERNS)
+
+
+def _has_list_navigation_signal(facts: ReadmeFacts) -> bool:
+    return _matches_any(facts.full_text_plain, LIST_NAVIGATION_PATTERNS)
 
 
 def _has_demo_image_signal(markdown: str) -> bool:
