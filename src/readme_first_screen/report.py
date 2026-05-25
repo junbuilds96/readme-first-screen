@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from .models import CATEGORY_NAMES, ScoreReport
 
 
-def render_human(report: ScoreReport) -> str:
+def render_human(
+    report: ScoreReport,
+    comparison: Mapping[str, int | str] | None = None,
+) -> str:
     lines = [
         f"README first-screen score: {report.total_score}/{report.max_score} ({report.grade})",
         f"Source: {report.source}",
@@ -12,9 +17,12 @@ def render_human(report: ScoreReport) -> str:
             f"{report.first_screen['lines_seen']}/{report.first_screen['line_limit']} lines, "
             f"{report.first_screen['chars_seen']}/{report.first_screen['char_limit']} chars"
         ),
-        "",
-        "Section scores:",
     ]
+
+    if comparison is not None:
+        lines.extend(_comparison_section(comparison, report.max_score))
+
+    lines.extend(["", "Section scores:"])
 
     for name in CATEGORY_NAMES:
         category = report.categories[name]
@@ -167,3 +175,15 @@ def _section(title: str, values: tuple[str, ...], empty: str) -> list[str]:
     else:
         lines.append(f"  - {empty}")
     return lines
+
+
+def _comparison_section(comparison: Mapping[str, int | str], max_score: int) -> list[str]:
+    delta = int(comparison["delta"])
+    delta_text = f"{delta:+d}"
+    return [
+        "",
+        "Comparison:",
+        f"  - Baseline score: {comparison['baseline_total_score']}/{max_score}",
+        f"  - Current score: {comparison['current_total_score']}/{max_score}",
+        f"  - Delta: {delta_text} ({comparison['result']})",
+    ]

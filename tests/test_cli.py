@@ -150,6 +150,47 @@ def test_cli_json_output(tmp_path):
     }
 
 
+def test_cli_human_output_includes_baseline_comparison(tmp_path):
+    current = tmp_path / "README.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--baseline", str(baseline), str(current))
+
+    assert result.returncode == 0
+    assert result.stderr == ""
+    assert (
+        result.stdout.index("First screen analyzed:")
+        < result.stdout.index("Comparison:")
+        < result.stdout.index("Section scores:")
+    )
+    assert "  - Baseline score: 26/100" in result.stdout
+    assert "  - Current score: 98/100" in result.stdout
+    assert "  - Delta: +72 (improved)" in result.stdout
+
+
+def test_cli_json_output_includes_baseline_comparison(tmp_path):
+    current = tmp_path / "README.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--json", "--baseline", str(baseline), str(current))
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert data["source"] == str(current)
+    assert data["comparison"] == {
+        "baseline_source": str(baseline),
+        "baseline_total_score": 26,
+        "current_total_score": 98,
+        "delta": 72,
+        "result": "improved",
+    }
+    assert result.stderr == ""
+
+
 def test_cli_fail_under_passes_when_score_meets_threshold(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(README, encoding="utf-8")
@@ -185,6 +226,20 @@ def test_cli_fail_under_json_output_still_emitted_on_failure(tmp_path):
     assert result.stderr == ""
 
 
+def test_cli_fail_under_applies_to_current_score_only_with_baseline(tmp_path):
+    current = tmp_path / "README.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--baseline", str(baseline), "--fail-under", "90", str(current))
+
+    assert result.returncode == 0
+    assert "  - Baseline score: 26/100" in result.stdout
+    assert "  - Current score: 98/100" in result.stdout
+    assert result.stderr == ""
+
+
 def test_cli_fail_under_rejects_invalid_threshold(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(README, encoding="utf-8")
@@ -201,3 +256,16 @@ def test_cli_missing_file_exits_two():
 
     assert result.returncode == 2
     assert "README file not found" in result.stderr
+
+
+def test_cli_baseline_load_error_exits_two(tmp_path):
+    readme = tmp_path / "README.md"
+    missing_baseline = tmp_path / "missing-before.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--baseline", str(missing_baseline), str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "could not load baseline: README file not found" in result.stderr
+    assert str(missing_baseline) in result.stderr

@@ -41,6 +41,12 @@ Gate CI on a minimum score:
 readme-first-screen --fail-under 80 README.md
 ```
 
+Compare a README rewrite against a before version:
+
+```bash
+readme-first-screen --baseline README-before.md README.md
+```
+
 For a copy-paste GitHub Actions quality gate and local preflight command, see
 [CI Quality Gate](docs/ci.md).
 
@@ -153,6 +159,10 @@ The category keys are stable for the `1.0` schema:
 - `proof_credibility`
 - `visual_clarity`
 
+When `--baseline PATH_OR_URL` is provided, JSON output also includes a top-level
+`comparison` object with the baseline source, baseline score, current score,
+signed delta, and result (`improved`, `regressed`, or `unchanged`).
+
 ## Scoring rubric
 
 The total score is 100 points:
@@ -208,7 +218,6 @@ that intentionally lead with visuals. Treat suggestions as review prompts.
 - GitHub Action that comments on pull requests when the first screen regresses
 - Config file for project-specific vocabulary and thresholds
 - More precise Markdown parsing while keeping deterministic scoring
-- Optional baseline comparison for README changes
 
 ## License
 
