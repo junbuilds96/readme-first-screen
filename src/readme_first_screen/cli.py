@@ -10,6 +10,16 @@ from .report import render_human
 from .scoring import score_readme
 
 
+def fail_under_threshold(value: str) -> int:
+    try:
+        threshold = int(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be an integer from 0 to 100") from exc
+    if not 0 <= threshold <= 100:
+        raise argparse.ArgumentTypeError("must be an integer from 0 to 100")
+    return threshold
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="readme-first-screen",
@@ -23,6 +33,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print a stable JSON report instead of the human-readable report.",
+    )
+    parser.add_argument(
+        "--fail-under",
+        metavar="N",
+        type=fail_under_threshold,
+        help="Exit with status 1 if the total score is below N (0-100).",
     )
     parser.add_argument(
         "--version",
@@ -47,6 +63,8 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(report.to_dict(), indent=2, sort_keys=True))
     else:
         print(render_human(report), end="")
+    if args.fail_under is not None and report.total_score < args.fail_under:
+        return 1
     return 0
 
 

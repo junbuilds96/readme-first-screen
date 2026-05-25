@@ -26,6 +26,14 @@ MIT License. CI runs tests.
 """
 
 
+WEAK_README = """# Demo
+
+![build](https://example.com/build.svg)
+![coverage](https://example.com/coverage.svg)
+![downloads](https://example.com/downloads.svg)
+"""
+
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -140,6 +148,52 @@ def test_cli_json_output(tmp_path):
         "proof_credibility",
         "visual_clarity",
     }
+
+
+def test_cli_fail_under_passes_when_score_meets_threshold(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--fail-under", "0", str(readme))
+
+    assert result.returncode == 0
+    assert "README first-screen score:" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_fail_under_exits_one_when_score_is_below_threshold(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--fail-under", "100", str(readme))
+
+    assert result.returncode == 1
+    assert "README first-screen score:" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_fail_under_json_output_still_emitted_on_failure(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--json", "--fail-under", "100", str(readme))
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 1
+    assert data["source"] == str(readme)
+    assert data["total_score"] < 100
+    assert result.stderr == ""
+
+
+def test_cli_fail_under_rejects_invalid_threshold(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--fail-under", "101", str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "argument --fail-under: must be an integer from 0 to 100" in result.stderr
 
 
 def test_cli_missing_file_exits_two():

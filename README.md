@@ -35,6 +35,12 @@ Get machine-readable output:
 readme-first-screen --json README.md
 ```
 
+Gate CI on a minimum score:
+
+```bash
+readme-first-screen --fail-under 80 README.md
+```
+
 ## Sample output
 
 ```text
