@@ -150,6 +150,33 @@ def test_cli_json_output(tmp_path):
     }
 
 
+def test_cli_single_summary_output(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--summary", str(readme))
+
+    assert result.returncode == 0
+    assert "README first-screen score:" in result.stdout
+    assert result.stdout.endswith(
+        f"Summary: score=26/100, grade=unclear, source={readme}, "
+        "fix_first=Open with a project name and one-sentence definition "
+        "before any secondary detail.\n"
+    )
+    assert result.stderr == ""
+
+
+def test_cli_summary_rejects_json(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--summary", "--json", str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--summary cannot be used with --json" in result.stderr
+
+
 def test_cli_batch_human_output(tmp_path):
     good = tmp_path / "README-good.md"
     weak = tmp_path / "README-weak.md"
@@ -168,6 +195,25 @@ def test_cli_batch_human_output(tmp_path):
     assert "Average score:" in result.stdout
     assert f"  - ok     98/100 excellent {good}" in result.stdout
     assert f"  - ok     26/100 unclear {weak}" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_batch_summary_output(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    batch = tmp_path / "batch.txt"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+    batch.write_text(f"{good}\n{weak}\n", encoding="utf-8")
+
+    result = run_cli("--summary", "--batch", str(batch))
+
+    assert result.returncode == 0
+    assert "README first-screen batch: 2 sources, 2 ok, 0 errors" in result.stdout
+    assert result.stdout.endswith(
+        "Summary: item_count=2, ok_count=2, error_count=0, "
+        f"average_score=62.0/100, lowest_ok={weak} (26/100 unclear)\n"
+    )
     assert result.stderr == ""
 
 

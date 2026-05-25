@@ -9,7 +9,12 @@ from typing import Any
 from . import __version__
 from .input import ReadmeInputError, load_readme
 from .models import ScoreReport
-from .report import render_batch_human, render_human
+from .report import (
+    render_batch_human,
+    render_batch_summary,
+    render_human,
+    render_summary,
+)
 from .scoring import score_readme
 
 
@@ -46,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print a stable JSON report instead of the human-readable report.",
     )
     parser.add_argument(
+        "--summary",
+        action="store_true",
+        help="Append a concise one-line summary to the human-readable report.",
+    )
+    parser.add_argument(
         "--out",
         metavar="PATH",
         help="Write the rendered report to PATH instead of printing it to stdout.",
@@ -75,6 +85,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.summary and args.json:
+        parser.error("--summary cannot be used with --json")
 
     if args.batch is not None:
         if args.source is not None:
@@ -112,6 +125,8 @@ def main(argv: list[str] | None = None) -> int:
         rendered_output = json.dumps(output, indent=2, sort_keys=True) + "\n"
     else:
         rendered_output = render_human(report, comparison=comparison)
+        if args.summary:
+            rendered_output += render_summary(report) + "\n"
 
     write_or_print(rendered_output, args.out)
 
@@ -132,6 +147,8 @@ def run_batch(args: argparse.Namespace) -> int:
         rendered_output = json.dumps(report, indent=2, sort_keys=True) + "\n"
     else:
         rendered_output = render_batch_human(report)
+        if args.summary:
+            rendered_output += render_batch_summary(report) + "\n"
 
     write_or_print(rendered_output, args.out)
 

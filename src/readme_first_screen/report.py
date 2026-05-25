@@ -36,6 +36,31 @@ def render_batch_human(report: Mapping[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def render_batch_summary(report: Mapping[str, Any]) -> str:
+    average_score = report["average_score"]
+    average_text = "n/a" if average_score is None else f"{float(average_score):.1f}/100"
+    lowest_ok = min(
+        (item for item in report["items"] if item["status"] == "ok"),
+        key=lambda item: item["total_score"],
+        default=None,
+    )
+    if lowest_ok is None:
+        lowest_text = "none"
+    else:
+        lowest_text = (
+            f"{lowest_ok['source']} "
+            f"({lowest_ok['total_score']}/100 {lowest_ok['grade']})"
+        )
+    return (
+        "Summary: "
+        f"item_count={report['item_count']}, "
+        f"ok_count={report['ok_count']}, "
+        f"error_count={report['error_count']}, "
+        f"average_score={average_text}, "
+        f"lowest_ok={lowest_text}"
+    )
+
+
 def _plural(count: int, singular: str) -> str:
     if count == 1:
         return singular
@@ -80,6 +105,23 @@ def render_human(
     lines.extend(_section("Issues", report.issues, empty="No major issues found."))
     lines.extend(_section("Actionable suggestions", report.suggestions, empty="No suggestions."))
     return "\n".join(lines) + "\n"
+
+
+def render_summary(report: ScoreReport) -> str:
+    priority_title = _priority_section_title(report)
+    priority_items = _fix_first_items(report)
+    if priority_items:
+        priority_label = priority_title.lower().replace(" ", "_")
+        priority_text = f"{priority_label}={priority_items[0]}"
+    else:
+        priority_text = "fix_first=no urgent first-screen fix"
+    return (
+        "Summary: "
+        f"score={report.total_score}/{report.max_score}, "
+        f"grade={report.grade}, "
+        f"source={report.source}, "
+        f"{priority_text}"
+    )
 
 
 def _priority_section_title(report: ScoreReport) -> str:

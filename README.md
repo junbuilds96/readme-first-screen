@@ -17,6 +17,12 @@ pip install -e ".[dev]"
 readme-first-screen README.md
 ```
 
+Append a concise one-line summary after the full human report:
+
+```bash
+readme-first-screen --summary README.md
+```
+
 Check a public GitHub repository:
 
 ```bash
@@ -95,6 +101,8 @@ Actionable suggestions:
 ## JSON schema
 
 `--json` prints a stable JSON object:
+
+`--summary` is human-output only and is rejected when used with `--json`.
 
 ```json
 {
