@@ -78,6 +78,9 @@ COMMAND_PATTERNS = (
     r"\bpipx?\s+install\b",
     r"\buv\s+(tool\s+)?(run|install)\b",
     r"\bpython\s+-m\b",
+    r"\bbrew\s+install\b",
+    r"\bscoop\s+install\b",
+    r"\bgo\s+install\s+\S+@\S+\b",
     r"\bnpm\s+(install|run|exec)\b",
     r"\bpnpm\s+add\b",
     r"\byarn\s+add\b",
@@ -86,6 +89,10 @@ COMMAND_PATTERNS = (
     r"\bmake\s+[a-z0-9_-]+\b",
     r"\bdocker\s+(run|compose)\b",
     r"\breadme-first-screen\b",
+)
+FETCH_PIPE_INSTALLER_RE = re.compile(
+    r"^(?:curl|wget)\b[^\n|]*https?://[^\n|]+\|\s*(?:sudo\s+)?(?:sh|bash)\b",
+    re.IGNORECASE,
 )
 
 PROOF_PATTERNS = (
@@ -523,6 +530,8 @@ def _looks_like_command_candidate(text: str) -> bool:
     prefix_match = COMMAND_PREFIX_RE.match(candidate)
     command_start = prefix_match.end() if prefix_match else 0
     command_text = candidate[command_start:]
+    if FETCH_PIPE_INSTALLER_RE.search(command_text):
+        return True
     for pattern in COMMAND_PATTERNS:
         match = re.search(pattern, command_text, re.IGNORECASE)
         if match is None or match.start() != 0:

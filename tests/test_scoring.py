@@ -187,6 +187,49 @@ It reports setup issues before release.
         assert "A runnable command appears on the first screen." in report.strengths
 
 
+def test_common_installer_commands_are_detected():
+    for command in (
+        "brew install readme-first-screen",
+        "brew install --cask example-app",
+        "scoop install readme-first-screen",
+        "go install github.com/example/tool@latest",
+        "curl -fsSL https://example.com/install.sh | sh",
+        "wget -qO- https://example.com/install.sh | bash",
+    ):
+        readme = f"""# Demo Package
+
+Demo Package is a CLI for developers who need package checks.
+It reports setup issues before release.
+
+```bash
+{command}
+```
+"""
+
+        report = score_readme(readme)
+
+        assert report.metadata["first_command_line"] == 7
+        assert "A runnable command appears on the first screen." in report.strengths
+
+
+def test_plain_network_fetch_commands_are_not_installers():
+    readme = """# Demo Package
+
+Demo Package is a CLI for developers who need package checks.
+It reports setup issues before release.
+
+```bash
+curl -fsSL https://example.com/install.sh
+wget https://example.com/install.sh
+```
+"""
+
+    report = score_readme(readme)
+
+    assert report.metadata["first_command_line"] is None
+    assert any("No install or run command" in issue for issue in report.issues)
+
+
 def test_screenshot_image_counts_as_demo_proof_evidence():
     report = score_readme(SCREENSHOT_README)
 
