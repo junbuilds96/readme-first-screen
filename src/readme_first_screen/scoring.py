@@ -99,7 +99,12 @@ VAGUE_ADJECTIVES = {
 
 BADGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>", re.IGNORECASE)
 CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
+CODE_FENCE_LINE_RE = re.compile(r"^\s{0,3}(```|~~~)")
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S+")
+INLINE_CODE_RE = re.compile(r"`([^`]+)`")
+MARKDOWN_PREFIX_RE = re.compile(r"^(?:(?:[-*+]\s+(?:\[[ xX]\]\s+)?)|\d+[.)]\s+|>\s+)+")
+SHELL_PROMPT_RE = re.compile(r"^(?:\$|>|%|#)\s+")
+COMMAND_PREFIX_RE = re.compile(r"^(?:(?:[A-Za-z_][A-Za-z0-9_]*=\S+|sudo|env)\s+)*")
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,7 @@ class ReadmeFacts:
     badges_before_explanation: int
     first_explanation_line: int | None
     first_heading_line: int | None
+    first_command_line: int | None
 
 
 def score_readme(text: str, source: str = "input") -> ScoreReport:
@@ -154,6 +160,7 @@ def score_readme(text: str, source: str = "input") -> ScoreReport:
             "first_heading_line": facts.first_heading_line,
             "first_explanation_line": facts.first_explanation_line,
             "badges_before_explanation": facts.badges_before_explanation,
+            "first_command_line": facts.first_command_line,
         },
     )
 
@@ -185,6 +192,7 @@ def _extract_facts(text: str) -> ReadmeFacts:
         badges_before_explanation=_badges_before_explanation(lines, first_explanation_line),
         first_explanation_line=first_explanation_line,
         first_heading_line=headings[0][0] if headings else None,
+        first_command_line=_first_command_line(lines),
     )
 
 
@@ -291,14 +299,13 @@ def _score_quick_start(facts: ReadmeFacts) -> CategoryScore:
     strengths: list[str] = []
     issues: list[str] = []
     suggestions: list[str] = []
-    first = facts.first_text_plain
     full = facts.full_text_plain
-    code_text = "\n".join(facts.code_blocks)
 
-    if _matches_any(first, COMMAND_PATTERNS) or _matches_any("\n".join(facts.first_code_blocks), COMMAND_PATTERNS):
+    command_line = facts.first_command_line
+    if command_line is not None and command_line <= FIRST_SCREEN_LINES:
         score += 10
         strengths.append("A runnable command appears on the first screen.")
-    elif _matches_any(full, COMMAND_PATTERNS) or _matches_any(code_text, COMMAND_PATTERNS):
+    elif command_line is not None:
         score += 7
         strengths.append("A runnable command is included.")
         issues.append("The first runnable command appears after the first screen.")
@@ -442,6 +449,66 @@ def _first_explanation_line(lines: list[str]) -> int | None:
 def _badges_before_explanation(lines: list[str], first_explanation_line: int | None) -> int:
     limit = first_explanation_line or min(len(lines), FIRST_SCREEN_LINES)
     return sum(len(BADGE_RE.findall(line)) for line in lines[:limit])
+
+
+def _first_command_line(lines: list[str]) -> int | None:
+    in_code_block = False
+
+    for index, line in enumerate(lines, start=1):
+        if CODE_FENCE_LINE_RE.match(line):
+            in_code_block = not in_code_block
+            continue
+        if _is_command_line(line, in_code_block=in_code_block):
+            return index
+    return None
+
+
+def _is_command_line(line: str, *, in_code_block: bool) -> bool:
+    stripped = line.strip()
+    if not stripped:
+        return False
+
+    if in_code_block:
+        return _looks_like_command_candidate(stripped)
+
+    if HEADING_RE.match(stripped) or BADGE_RE.search(stripped):
+        return False
+    if any(_looks_like_command_candidate(segment) for segment in INLINE_CODE_RE.findall(stripped)):
+        return True
+    return _looks_like_command_candidate(MARKDOWN_PREFIX_RE.sub("", stripped))
+
+
+def _looks_like_command_candidate(text: str) -> bool:
+    candidate = SHELL_PROMPT_RE.sub("", text.strip().strip("`"))
+    prefix_match = COMMAND_PREFIX_RE.match(candidate)
+    command_start = prefix_match.end() if prefix_match else 0
+    command_text = candidate[command_start:]
+    for pattern in COMMAND_PATTERNS:
+        match = re.search(pattern, command_text, re.IGNORECASE)
+        if match is None or match.start() != 0:
+            continue
+        if pattern == r"\breadme-first-screen\b" and not _is_readme_first_screen_invocation(
+            command_text
+        ):
+            continue
+        return True
+    return False
+
+
+def _is_readme_first_screen_invocation(command_text: str) -> bool:
+    tokens = command_text.split()
+    if not tokens or tokens[0].lower() != "readme-first-screen":
+        return False
+    if len(tokens) == 1:
+        return True
+    first_arg = tokens[1]
+    return (
+        first_arg == "-"
+        or first_arg.startswith("-")
+        or "://" in first_arg
+        or "/" in first_arg
+        or "." in first_arg
+    )
 
 
 def _has_h1_in_first_screen(facts: ReadmeFacts) -> bool:

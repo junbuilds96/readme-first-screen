@@ -42,6 +42,7 @@ def test_strong_readme_scores_well():
     assert report.categories["what_is_it"].score >= 15
     assert report.categories["quick_start"].score >= 15
     assert "A runnable command appears on the first screen." in report.strengths
+    assert report.metadata["first_command_line"] == 10
 
 
 def test_weak_readme_flags_first_screen_antipatterns():
@@ -68,3 +69,22 @@ def test_json_schema_contains_stable_categories():
         "visual_clarity",
     ]
     assert data["categories"]["what_is_it"]["max_score"] == 20
+
+
+def test_command_metadata_uses_command_lines_not_project_name_mentions():
+    readme = """# readme-first-screen
+
+readme-first-screen is a Python CLI for maintainers who need README checks.
+It reports confusing first screens before a release.
+
+## Usage
+
+```bash
+readme-first-screen README.md
+```
+"""
+
+    report = score_readme(readme)
+
+    assert report.metadata["first_command_line"] == 9
+    assert "A runnable command appears on the first screen." in report.strengths

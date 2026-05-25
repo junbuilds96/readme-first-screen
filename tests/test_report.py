@@ -65,10 +65,14 @@ def test_human_report_prioritizes_weak_first_screen_fixes():
     output = render_human(score_readme(WEAK_README))
 
     assert output.index("Fix first:") < output.index("Strengths:")
+    assert output.index("Evidence:") < output.index("Strengths:")
     assert _section_bullets(output, "Fix first") == [
         "Replace the badge wall with a project name and one-sentence definition at the top.",
         "Put the target user and main outcome in the opening paragraph.",
         "Add a copy-paste install or run command to the first screen.",
+    ]
+    assert _section_bullets(output, "Evidence") == [
+        "Badges before explanation: 4",
     ]
 
 
@@ -77,6 +81,11 @@ def test_human_report_shows_no_urgent_fix_for_strong_report():
 
     assert _section_bullets(output, "Fix first") == [
         "No urgent first-screen fix found.",
+    ]
+    assert _section_bullets(output, "Evidence") == [
+        "First heading line: 1",
+        "First explanation line: 3",
+        "First runnable command line: 9",
     ]
     assert "fix_first" not in score_readme(STRONG_README).to_dict()
 
@@ -91,6 +100,7 @@ def test_human_report_does_not_recommend_definition_when_what_is_it_is_strong():
     assert "The opening explains what the project is." in report.strengths
     assert "Fix first:" not in output
     assert output.index("Polish opportunities:") < output.index("Strengths:")
+    assert output.index("Evidence:") < output.index("Strengths:")
     assert _section_bullets(output, "Polish opportunities") == [
         "Put a one- or two-sentence explanation before badges, screenshots, and tables.",
         "Use a short intro, short sections, and one compact example before deeper detail.",

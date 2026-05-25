@@ -28,6 +28,9 @@ def render_human(report: ScoreReport) -> str:
             empty="No urgent first-screen fix found.",
         )
     )
+    evidence = _evidence_items(report)
+    if evidence:
+        lines.extend(_section("Evidence", evidence, empty="No source evidence found."))
     lines.extend(_section("Strengths", report.strengths, empty="No strong signals found."))
     lines.extend(_section("Issues", report.issues, empty="No major issues found."))
     lines.extend(_section("Actionable suggestions", report.suggestions, empty="No suggestions."))
@@ -127,6 +130,29 @@ def _weakest_category_names(report: ScoreReport) -> list[str]:
             CATEGORY_NAMES.index(name),
         ),
     )
+
+
+def _evidence_items(report: ScoreReport) -> tuple[str, ...]:
+    metadata = report.metadata
+    items: list[str] = []
+
+    first_heading_line = metadata.get("first_heading_line")
+    if first_heading_line is not None:
+        items.append(f"First heading line: {first_heading_line}")
+
+    first_explanation_line = metadata.get("first_explanation_line")
+    if first_explanation_line is not None:
+        items.append(f"First explanation line: {first_explanation_line}")
+
+    badges_before_explanation = metadata.get("badges_before_explanation")
+    if badges_before_explanation:
+        items.append(f"Badges before explanation: {badges_before_explanation}")
+
+    first_command_line = metadata.get("first_command_line")
+    if first_command_line is not None:
+        items.append(f"First runnable command line: {first_command_line}")
+
+    return tuple(items)
 
 
 def _section(title: str, values: tuple[str, ...], empty: str) -> list[str]:
