@@ -97,7 +97,15 @@ VAGUE_ADJECTIVES = {
     "simple",
 }
 
-BADGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>", re.IGNORECASE)
+MARKDOWN_IMAGE_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)", re.IGNORECASE)
+HTML_IMG_RE = re.compile(r"<img\b[^>]*>", re.IGNORECASE)
+IMAGE_RE = re.compile(r"!\[[^\]]*\]\([^)]+\)|<img\b[^>]*>", re.IGNORECASE)
+DEMO_IMAGE_RE = re.compile(r"\b(screenshot|demo|preview|output)\b", re.IGNORECASE)
+BADGE_IMAGE_RE = re.compile(
+    r"\b(badge|shields?\.io|ci|build|coverage|license|version|downloads?|status|"
+    r"tests?|release|workflow|actions?)\b",
+    re.IGNORECASE,
+)
 CODE_FENCE_RE = re.compile(r"```.*?```", re.DOTALL)
 CODE_FENCE_LINE_RE = re.compile(r"^\s{0,3}(```|~~~)")
 HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+\S+")
@@ -341,7 +349,11 @@ def _score_proof_credibility(facts: ReadmeFacts) -> CategoryScore:
     first = facts.first_text_plain
     full = facts.full_text_plain
 
-    if _matches_any(first, PROOF_PATTERNS) or facts.badges_before_explanation > 0:
+    if (
+        _matches_any(first, PROOF_PATTERNS)
+        or facts.badges_before_explanation > 0
+        or _has_demo_image_signal(facts.first_text)
+    ):
         score += 5
         strengths.append("Some credibility signal appears early.")
     elif _matches_any(full, PROOF_PATTERNS):
@@ -360,7 +372,11 @@ def _score_proof_credibility(facts: ReadmeFacts) -> CategoryScore:
         issues.append("No CI, test, or quality signal was found.")
         suggestions.append("Add a CI/test badge or a short testing note once it exists.")
 
-    if re.search(r"\b(demo|screenshot|example output|sample output|used by|case study)\b", full, re.IGNORECASE):
+    if re.search(
+        r"\b(demo|screenshot|example output|sample output|used by|case study)\b",
+        full,
+        re.IGNORECASE,
+    ) or _has_demo_image_signal(facts.text):
         score += 3
     else:
         issues.append("No demo, sample output, or proof example was found.")
@@ -425,7 +441,7 @@ def _category(
 
 def _plain_text(markdown: str) -> str:
     text = CODE_FENCE_RE.sub(" ", markdown)
-    text = BADGE_RE.sub(" ", text)
+    text = IMAGE_RE.sub(" ", text)
     text = re.sub(r"`([^`]+)`", r"\1", text)
     text = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", text)
     text = re.sub(r"^#{1,6}\s+", "", text, flags=re.MULTILINE)
@@ -439,7 +455,7 @@ def _first_explanation_line(lines: list[str]) -> int | None:
         plain = _plain_text(stripped)
         if not plain:
             continue
-        if HEADING_RE.match(stripped) or BADGE_RE.search(stripped):
+        if HEADING_RE.match(stripped) or IMAGE_RE.search(stripped):
             continue
         if len(plain.split()) >= 6:
             return index
@@ -448,7 +464,7 @@ def _first_explanation_line(lines: list[str]) -> int | None:
 
 def _badges_before_explanation(lines: list[str], first_explanation_line: int | None) -> int:
     limit = first_explanation_line or min(len(lines), FIRST_SCREEN_LINES)
-    return sum(len(BADGE_RE.findall(line)) for line in lines[:limit])
+    return sum(_badge_image_count(line) for line in lines[:limit])
 
 
 def _first_command_line(lines: list[str]) -> int | None:
@@ -471,7 +487,7 @@ def _is_command_line(line: str, *, in_code_block: bool) -> bool:
     if in_code_block:
         return _looks_like_command_candidate(stripped)
 
-    if HEADING_RE.match(stripped) or BADGE_RE.search(stripped):
+    if HEADING_RE.match(stripped) or IMAGE_RE.search(stripped):
         return False
     if any(_looks_like_command_candidate(segment) for segment in INLINE_CODE_RE.findall(stripped)):
         return True
@@ -537,6 +553,33 @@ def _vague_without_concrete(text: str) -> bool:
 
 def _matches_any(text: str, patterns: tuple[str, ...]) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in patterns)
+
+
+def _has_demo_image_signal(markdown: str) -> bool:
+    for match in MARKDOWN_IMAGE_RE.finditer(markdown):
+        image_text = _markdown_image_text(match)
+        if DEMO_IMAGE_RE.search(image_text) and not _is_badge_image_text(image_text):
+            return True
+    return False
+
+
+def _badge_image_count(markdown: str) -> int:
+    count = 0
+    for match in MARKDOWN_IMAGE_RE.finditer(markdown):
+        if _is_badge_image_text(_markdown_image_text(match)):
+            count += 1
+    for match in HTML_IMG_RE.finditer(markdown):
+        if _is_badge_image_text(match.group(0)):
+            count += 1
+    return count
+
+
+def _markdown_image_text(match: re.Match[str]) -> str:
+    return f"{match.group(1)} {match.group(2)}"
+
+
+def _is_badge_image_text(text: str) -> bool:
+    return bool(BADGE_IMAGE_RE.search(text))
 
 
 def _has_example_signal(text: str) -> bool:

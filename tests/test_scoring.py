@@ -35,6 +35,25 @@ Awesome modern lightweight flexible thing.
 """
 
 
+SCREENSHOT_README = """# Demo Shot
+
+Demo Shot is a Python CLI for developers who need to inspect terminal runs.
+It reports command results before release.
+
+![Terminal output screenshot](docs/terminal.png)
+"""
+
+
+BADGE_ONLY_README = """# Badge Only
+
+![CI](https://img.shields.io/badge/ci-passing-brightgreen.svg)
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+
+Badge Only is a Python CLI for developers who need release checks.
+It reports command results before release.
+"""
+
+
 def test_strong_readme_scores_well():
     report = score_readme(STRONG_README)
 
@@ -88,3 +107,23 @@ readme-first-screen README.md
 
     assert report.metadata["first_command_line"] == 9
     assert "A runnable command appears on the first screen." in report.strengths
+
+
+def test_screenshot_image_counts_as_demo_proof_evidence():
+    report = score_readme(SCREENSHOT_README)
+
+    assert "Some credibility signal appears early." in report.strengths
+    assert not any(
+        "No demo, sample output, or proof example was found." == issue
+        for issue in report.issues
+    )
+
+
+def test_badge_images_do_not_count_as_demo_proof_evidence():
+    report = score_readme(BADGE_ONLY_README)
+
+    assert report.metadata["badges_before_explanation"] == 2
+    assert any(
+        "No demo, sample output, or proof example was found." == issue
+        for issue in report.issues
+    )
