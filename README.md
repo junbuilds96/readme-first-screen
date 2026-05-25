@@ -35,6 +35,12 @@ Get machine-readable output:
 readme-first-screen --json README.md
 ```
 
+Save machine-readable output for a CI artifact or later processing:
+
+```bash
+readme-first-screen --json --out artifacts/readme-first-screen.json README.md
+```
+
 Gate CI on a minimum score:
 
 ```bash
@@ -165,6 +171,9 @@ The category keys are stable for the `1.0` schema:
 When `--baseline PATH_OR_URL` is provided, JSON output also includes a top-level
 `comparison` object with the baseline source, baseline score, current score,
 signed delta, and result (`improved`, `regressed`, or `unchanged`).
+
+Use `--out PATH` with `--json` to save the exact JSON report to a file. Parent
+directories are created automatically, which is useful for CI artifacts.
 
 ## Scoring rubric
 

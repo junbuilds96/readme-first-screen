@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+from pathlib import Path
 import sys
 
 from . import __version__
@@ -34,6 +35,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print a stable JSON report instead of the human-readable report.",
+    )
+    parser.add_argument(
+        "--out",
+        metavar="PATH",
+        help="Write the rendered report to PATH instead of printing it to stdout.",
     )
     parser.add_argument(
         "--fail-under",
@@ -81,9 +87,18 @@ def main(argv: list[str] | None = None) -> int:
         output = report.to_dict()
         if comparison is not None:
             output["comparison"] = comparison
-        print(json.dumps(output, indent=2, sort_keys=True))
+        rendered_output = json.dumps(output, indent=2, sort_keys=True) + "\n"
     else:
-        print(render_human(report, comparison=comparison), end="")
+        rendered_output = render_human(report, comparison=comparison)
+
+    if args.out is not None:
+        output_path = Path(args.out)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered_output, encoding="utf-8")
+        print(f"Wrote report to {args.out}")
+    else:
+        print(rendered_output, end="")
+
     if args.fail_under is not None and report.total_score < args.fail_under:
         return 1
     return 0

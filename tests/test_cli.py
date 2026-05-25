@@ -150,6 +150,72 @@ def test_cli_json_output(tmp_path):
     }
 
 
+def test_cli_human_output_can_be_written_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "report.txt"
+    readme.write_text(README, encoding="utf-8")
+
+    expected = run_cli(str(readme))
+    result = run_cli("--out", str(out), str(readme))
+    report_text = out.read_text(encoding="utf-8")
+
+    assert expected.returncode == 0
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert "README first-screen score:" not in result.stdout
+    assert report_text == expected.stdout
+    assert result.stderr == ""
+
+
+def test_cli_json_output_can_be_written_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "report.json"
+    readme.write_text(README, encoding="utf-8")
+
+    expected = run_cli("--json", str(readme))
+    result = run_cli("--json", "--out", str(out), str(readme))
+    report_text = out.read_text(encoding="utf-8")
+    data = json.loads(report_text)
+
+    assert expected.returncode == 0
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert report_text == expected.stdout
+    assert data["schema_version"] == "1.0"
+    assert data["source"] == str(readme)
+    assert data["total_score"] >= 70
+    assert result.stderr == ""
+
+
+def test_cli_out_creates_parent_directories(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "artifacts" / "reports" / "readme-score.txt"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--out", str(out), str(readme))
+
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert out.exists()
+    assert "README first-screen score:" in out.read_text(encoding="utf-8")
+    assert result.stderr == ""
+
+
+def test_cli_fail_under_with_out_writes_report_before_exiting_one(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "failed-report.json"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--json", "--out", str(out), "--fail-under", "100", str(readme))
+    data = json.loads(out.read_text(encoding="utf-8"))
+
+    assert result.returncode == 1
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert data["source"] == str(readme)
+    assert data["total_score"] < 100
+    assert result.stderr == ""
+
+
 def test_cli_human_output_includes_baseline_comparison(tmp_path):
     current = tmp_path / "README.md"
     baseline = tmp_path / "README-before.md"
