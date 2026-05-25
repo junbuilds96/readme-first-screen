@@ -25,6 +25,8 @@ def load_readme(source: str) -> tuple[str, str]:
         return sys.stdin.read(), "stdin"
 
     if _is_url(source):
+        if _is_github_readme_blob_url(source):
+            return _fetch_github_blob_readme(source)
         if _is_github_repo_url(source):
             return _fetch_github_readme(source)
         return _fetch_url(source), source
@@ -49,6 +51,25 @@ def _is_github_repo_url(value: str) -> bool:
         return False
     parts = [part for part in parsed.path.split("/") if part]
     return len(parts) == 2 and not parts[1].endswith(".git")
+
+
+def _is_github_readme_blob_url(value: str) -> bool:
+    parsed = urlparse(value)
+    if parsed.netloc.lower() != "github.com":
+        return False
+    parts = [part for part in parsed.path.split("/") if part]
+    return (
+        len(parts) >= 5
+        and parts[2] == "blob"
+        and parts[-1] in README_CANDIDATES
+    )
+
+
+def _fetch_github_blob_readme(blob_url: str) -> tuple[str, str]:
+    parsed = urlparse(blob_url)
+    owner, repo, _, ref, *path_parts = [part for part in parsed.path.split("/") if part]
+    raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{ref}/{'/'.join(path_parts)}"
+    return _fetch_url(raw_url), raw_url
 
 
 def _fetch_github_readme(repo_url: str) -> tuple[str, str]:
