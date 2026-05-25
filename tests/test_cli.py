@@ -150,6 +150,101 @@ def test_cli_json_output(tmp_path):
     }
 
 
+def test_cli_batch_human_output(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    batch = tmp_path / "batch.txt"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+    batch.write_text(
+        f"\n# release candidates\n{good}\n\n{weak}\n",
+        encoding="utf-8",
+    )
+
+    result = run_cli("--batch", str(batch))
+
+    assert result.returncode == 0
+    assert "README first-screen batch: 2 sources, 2 ok, 0 errors" in result.stdout
+    assert "Average score:" in result.stdout
+    assert f"  - ok     98/100 excellent {good}" in result.stdout
+    assert f"  - ok     26/100 unclear {weak}" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_batch_json_output_continues_after_missing_source(tmp_path):
+    readme = tmp_path / "README.md"
+    missing = tmp_path / "missing.md"
+    batch = tmp_path / "batch.txt"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n{missing}\n", encoding="utf-8")
+
+    result = run_cli("--json", "--batch", str(batch))
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert data == {
+        "schema_version": "1.0",
+        "item_count": 2,
+        "ok_count": 1,
+        "error_count": 1,
+        "average_score": 98.0,
+        "items": [
+            {
+                "source": str(readme),
+                "status": "ok",
+                "total_score": 98,
+                "grade": "excellent",
+            },
+            {
+                "source": str(missing),
+                "status": "error",
+                "error": f"README file not found: {missing}",
+            },
+        ],
+    }
+    assert result.stderr == ""
+
+
+def test_cli_batch_out_writes_report_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    batch = tmp_path / "batch.txt"
+    out = tmp_path / "artifacts" / "batch-report.json"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n", encoding="utf-8")
+
+    expected = run_cli("--json", "--batch", str(batch))
+    result = run_cli("--json", "--batch", str(batch), "--out", str(out))
+
+    assert expected.returncode == 0
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert out.read_text(encoding="utf-8") == expected.stdout
+    assert result.stderr == ""
+
+
+def test_cli_batch_fail_under_exits_one_for_low_scores_or_load_errors(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    missing = tmp_path / "missing.md"
+    low_score_batch = tmp_path / "low-score-batch.txt"
+    missing_batch = tmp_path / "missing-batch.txt"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+    low_score_batch.write_text(f"{good}\n{weak}\n", encoding="utf-8")
+    missing_batch.write_text(f"{good}\n{missing}\n", encoding="utf-8")
+
+    low_score_result = run_cli("--batch", str(low_score_batch), "--fail-under", "80")
+    missing_result = run_cli("--batch", str(missing_batch), "--fail-under", "0")
+
+    assert low_score_result.returncode == 1
+    assert "README first-screen batch: 2 sources, 2 ok, 0 errors" in low_score_result.stdout
+    assert low_score_result.stderr == ""
+    assert missing_result.returncode == 1
+    assert "README first-screen batch: 2 sources, 1 ok, 1 error" in missing_result.stdout
+    assert f"README file not found: {missing}" in missing_result.stdout
+    assert missing_result.stderr == ""
+
+
 def test_cli_human_output_can_be_written_to_file(tmp_path):
     readme = tmp_path / "README.md"
     out = tmp_path / "report.txt"

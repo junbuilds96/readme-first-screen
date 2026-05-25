@@ -4,11 +4,12 @@ import argparse
 import json
 from pathlib import Path
 import sys
+from typing import Any
 
 from . import __version__
 from .input import ReadmeInputError, load_readme
 from .models import ScoreReport
-from .report import render_human
+from .report import render_batch_human, render_human
 from .scoring import score_readme
 
 
@@ -29,7 +30,15 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "source",
+        nargs="?",
         help="Path to a README/Markdown file, GitHub repo URL, raw URL, or '-' for stdin.",
+    )
+    parser.add_argument(
+        "--batch",
+        metavar="PATH",
+        help=(
+            "Score README sources listed in PATH, one per non-empty non-comment line."
+        ),
     )
     parser.add_argument(
         "--json",
@@ -45,7 +54,10 @@ def build_parser() -> argparse.ArgumentParser:
         "--fail-under",
         metavar="N",
         type=fail_under_threshold,
-        help="Exit with status 1 if the total score is below N (0-100).",
+        help=(
+            "Exit with status 1 if the total score is below N (0-100); "
+            "in batch mode, also fail if any source cannot be loaded."
+        ),
     )
     parser.add_argument(
         "--baseline",
@@ -63,6 +75,16 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+
+    if args.batch is not None:
+        if args.source is not None:
+            parser.error("source cannot be used with --batch")
+        if args.baseline is not None:
+            parser.error("--baseline cannot be used with --batch")
+        return run_batch(args)
+
+    if args.source is None:
+        parser.error("the following arguments are required: source")
 
     try:
         text, source_label = load_readme(args.source)
@@ -91,17 +113,110 @@ def main(argv: list[str] | None = None) -> int:
     else:
         rendered_output = render_human(report, comparison=comparison)
 
-    if args.out is not None:
-        output_path = Path(args.out)
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        output_path.write_text(rendered_output, encoding="utf-8")
-        print(f"Wrote report to {args.out}")
-    else:
-        print(rendered_output, end="")
+    write_or_print(rendered_output, args.out)
 
     if args.fail_under is not None and report.total_score < args.fail_under:
         return 1
     return 0
+
+
+def run_batch(args: argparse.Namespace) -> int:
+    try:
+        sources = load_batch_sources(args.batch)
+    except ReadmeInputError as exc:
+        print(f"readme-first-screen: {exc}", file=sys.stderr)
+        return 2
+
+    report = build_batch_report(sources)
+    if args.json:
+        rendered_output = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    else:
+        rendered_output = render_batch_human(report)
+
+    write_or_print(rendered_output, args.out)
+
+    if args.fail_under is not None and batch_fails_threshold(report, args.fail_under):
+        return 1
+    return 0
+
+
+def load_batch_sources(path: str) -> list[str]:
+    batch_path = Path(path)
+    try:
+        text = batch_path.read_text(encoding="utf-8")
+    except FileNotFoundError as exc:
+        raise ReadmeInputError(f"Batch file not found: {path}") from exc
+    except OSError as exc:
+        raise ReadmeInputError(f"Could not read batch file {path}: {exc}") from exc
+
+    sources = []
+    for line in text.splitlines():
+        source = line.strip()
+        if source and not source.startswith("#"):
+            sources.append(source)
+    return sources
+
+
+def build_batch_report(sources: list[str]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    score_sum = 0
+    ok_count = 0
+    error_count = 0
+
+    for source in sources:
+        try:
+            text, source_label = load_readme(source)
+        except ReadmeInputError as exc:
+            error_count += 1
+            items.append(
+                {
+                    "source": source,
+                    "status": "error",
+                    "error": str(exc),
+                }
+            )
+            continue
+
+        score_report = score_readme(text, source=source_label)
+        ok_count += 1
+        score_sum += score_report.total_score
+        items.append(
+            {
+                "source": source,
+                "status": "ok",
+                "total_score": score_report.total_score,
+                "grade": score_report.grade,
+            }
+        )
+
+    average_score = round(score_sum / ok_count, 2) if ok_count else None
+    return {
+        "schema_version": "1.0",
+        "item_count": len(items),
+        "ok_count": ok_count,
+        "error_count": error_count,
+        "average_score": average_score,
+        "items": items,
+    }
+
+
+def batch_fails_threshold(report: dict[str, Any], threshold: int) -> bool:
+    if report["error_count"]:
+        return True
+    return any(
+        item["status"] == "ok" and item["total_score"] < threshold
+        for item in report["items"]
+    )
+
+
+def write_or_print(rendered_output: str, output_path_value: str | None) -> None:
+    if output_path_value is not None:
+        output_path = Path(output_path_value)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(rendered_output, encoding="utf-8")
+        print(f"Wrote report to {output_path_value}")
+    else:
+        print(rendered_output, end="")
 
 
 def build_comparison(

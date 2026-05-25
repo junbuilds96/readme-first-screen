@@ -47,6 +47,13 @@ Gate CI on a minimum score:
 readme-first-screen --fail-under 80 README.md
 ```
 
+Evaluate several README sources in one deterministic batch:
+
+```bash
+readme-first-screen --batch examples/batch-sources.txt
+readme-first-screen --json --batch examples/batch-sources.txt --out artifacts/readme-batch.json
+```
+
 Compare a README rewrite against a before version:
 
 ```bash

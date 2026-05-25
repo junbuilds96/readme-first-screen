@@ -1,8 +1,45 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from typing import Any
 
 from .models import CATEGORY_NAMES, ScoreReport
+
+
+def render_batch_human(report: Mapping[str, Any]) -> str:
+    average_score = report["average_score"]
+    if average_score is None:
+        average_text = "n/a"
+    else:
+        average_text = f"{float(average_score):.1f}/100"
+
+    lines = [
+        (
+            "README first-screen batch: "
+            f"{report['item_count']} {_plural(int(report['item_count']), 'source')}, "
+            f"{report['ok_count']} ok, "
+            f"{report['error_count']} {_plural(int(report['error_count']), 'error')}"
+        ),
+        f"Average score: {average_text}",
+        "",
+        "Items:",
+    ]
+
+    for item in report["items"]:
+        if item["status"] == "ok":
+            lines.append(
+                f"  - ok    {item['total_score']:>3}/100 {item['grade']} {item['source']}"
+            )
+        else:
+            lines.append(f"  - error ---/100 {item['source']}: {item['error']}")
+
+    return "\n".join(lines) + "\n"
+
+
+def _plural(count: int, singular: str) -> str:
+    if count == 1:
+        return singular
+    return f"{singular}s"
 
 
 def render_human(
