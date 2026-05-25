@@ -47,6 +47,9 @@ Compare a README rewrite against a before version:
 readme-first-screen --baseline README-before.md README.md
 ```
 
+To see the before/after value without installing anything, open the synthetic
+[examples](examples/) and the checked-in [example report](examples/report.txt).
+
 For a copy-paste GitHub Actions quality gate and local preflight command, see
 [CI Quality Gate](docs/ci.md).
 

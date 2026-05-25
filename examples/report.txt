@@ -1,0 +1,42 @@
+README first-screen score: 94/100 (excellent)
+Source: examples/README-after.md
+First screen analyzed: 23/30 lines, 539/2400 chars
+
+Comparison:
+  - Baseline score: 20/100
+  - Current score: 94/100
+  - Delta: +74 (improved)
+
+Section scores:
+  - what is it: 18/20
+  - target user: 11/15
+  - problem value: 15/15
+  - quick start: 20/20
+  - proof credibility: 15/15
+  - visual clarity: 15/15
+
+Fix first:
+  - No urgent first-screen fix found.
+
+Evidence:
+  - First heading line: 1
+  - First explanation line: 3
+  - First runnable command line: 10
+
+Strengths:
+  - The first screen names the project.
+  - The opening explains what the project is.
+  - An example appears early.
+  - The first screen identifies who it is for.
+  - The first screen explains the practical value.
+  - A runnable command appears on the first screen.
+  - The README includes an example.
+  - Some credibility signal appears early.
+  - Explanation starts early.
+  - The first screen is scannable.
+
+Issues:
+  - No major issues found.
+
+Actionable suggestions:
+  - No suggestions.
