@@ -89,7 +89,9 @@ def test_human_report_does_not_recommend_definition_when_what_is_it_is_strong():
     assert report.categories["what_is_it"].score >= 18
     assert "The first screen names the project." in report.strengths
     assert "The opening explains what the project is." in report.strengths
-    assert _section_bullets(output, "Fix first") == [
+    assert "Fix first:" not in output
+    assert output.index("Polish opportunities:") < output.index("Strengths:")
+    assert _section_bullets(output, "Polish opportunities") == [
         "Put a one- or two-sentence explanation before badges, screenshots, and tables.",
         "Use a short intro, short sections, and one compact example before deeper detail.",
     ]

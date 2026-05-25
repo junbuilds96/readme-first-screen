@@ -23,7 +23,7 @@ def render_human(report: ScoreReport) -> str:
 
     lines.extend(
         _section(
-            "Fix first",
+            _priority_section_title(report),
             _fix_first_items(report),
             empty="No urgent first-screen fix found.",
         )
@@ -32,6 +32,12 @@ def render_human(report: ScoreReport) -> str:
     lines.extend(_section("Issues", report.issues, empty="No major issues found."))
     lines.extend(_section("Actionable suggestions", report.suggestions, empty="No suggestions."))
     return "\n".join(lines) + "\n"
+
+
+def _priority_section_title(report: ScoreReport) -> str:
+    if report.grade == "excellent" and report.issues:
+        return "Polish opportunities"
+    return "Fix first"
 
 
 def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
