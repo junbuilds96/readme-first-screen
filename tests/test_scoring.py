@@ -109,6 +109,84 @@ readme-first-screen README.md
     assert "A runnable command appears on the first screen." in report.strengths
 
 
+def test_late_js_package_install_command_is_not_reported_as_missing():
+    lines_before_command = [
+        "# TanStack AI",
+        "",
+        "[![npm](https://img.shields.io/npm/v/@tanstack/ai)](https://npmjs.com)",
+        "[![build](https://img.shields.io/github/actions/workflow/status/tanstack/ai/ci.yml)](https://github.com)",
+        "[![license](https://img.shields.io/github/license/tanstack/ai)](https://github.com)",
+        "",
+        "TanStack AI is a TypeScript library for developers who build AI applications.",
+        "It helps teams compose agents before shipping confusing behavior.",
+        "",
+        "![Hero](./docs/hero.png)",
+        "",
+        "## Overview",
+        "",
+        "Use it to connect models, tools, and runtime state in one package.",
+        "",
+        "### Features",
+        "",
+        "- Type-safe primitives",
+        "- Streaming-friendly helpers",
+        "- Framework adapters",
+        "",
+        "### Packages",
+        "",
+        "The project is published as scoped packages for JavaScript apps.",
+        "",
+        "### Installation",
+        "",
+        "Pick your package manager.",
+        "",
+        "```bash",
+    ]
+    command_line = len(lines_before_command) + 1
+    readme = "\n".join(
+        [
+            *lines_before_command,
+            "pnpm add @tanstack/ai",
+            "```",
+            "",
+            "## Usage",
+            "",
+            "See the examples directory for a complete app.",
+        ]
+    )
+
+    report = score_readme(readme)
+
+    assert command_line > 30
+    assert report.metadata["first_command_line"] == command_line
+    assert "The first runnable command appears after the first screen." in report.issues
+    assert "Move one install or run command above the fold." in report.suggestions
+    assert not any("No install or run command" in issue for issue in report.issues)
+
+
+def test_js_package_manager_add_commands_are_detected():
+    for command in (
+        "pnpm add @scope/pkg",
+        "yarn add @scope/pkg",
+        "bun add @scope/pkg",
+        "npm install @scope/pkg",
+    ):
+        readme = f"""# Demo Package
+
+Demo Package is a JavaScript library for developers who need package checks.
+It reports setup issues before release.
+
+```bash
+{command}
+```
+"""
+
+        report = score_readme(readme)
+
+        assert report.metadata["first_command_line"] == 7
+        assert "A runnable command appears on the first screen." in report.strengths
+
+
 def test_screenshot_image_counts_as_demo_proof_evidence():
     report = score_readme(SCREENSHOT_README)
 
