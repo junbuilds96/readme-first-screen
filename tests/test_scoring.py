@@ -164,6 +164,44 @@ def test_late_js_package_install_command_is_not_reported_as_missing():
     assert not any("No install or run command" in issue for issue in report.issues)
 
 
+def test_awesome_curated_list_uses_list_quick_start_calibration():
+    first_screen = [
+        "# Awesome AI Tools",
+        "",
+        "A curated list of AI tools for developers who build agent applications.",
+        "",
+        "## Contents",
+        "",
+        "- [Agents](#agents)",
+        "- [Evaluation](#evaluation)",
+        "",
+        "## Agents",
+        "",
+        "- [CrewAI](https://github.com/crewAIInc/crewAI) - Framework for orchestrating agent workflows.",
+        "- [LangGraph](https://github.com/langchain-ai/langgraph) - Library for stateful agent apps.",
+        "",
+        "## Evaluation",
+        "",
+        "- [Promptfoo](https://github.com/promptfoo/promptfoo) - Test harness for prompt and model quality.",
+    ]
+    readme = "\n".join(
+        [
+            *first_screen,
+            *([""] * (31 - len(first_screen))),
+            "- [Example CLI](https://example.com/cli) - Install with `npm install example-cli`.",
+        ]
+    )
+
+    report = score_readme(readme)
+
+    assert report.metadata["first_command_line"] > 30
+    assert "The README has list navigation." in report.strengths
+    assert "Representative list entries appear on the first screen." in report.strengths
+    assert "The first runnable command appears after the first screen." not in report.issues
+    assert "Move one install or run command above the fold." not in report.suggestions
+    assert not any("No install or run command" in issue for issue in report.issues)
+
+
 def test_js_package_manager_add_commands_are_detected():
     for command in (
         "pnpm add @scope/pkg",

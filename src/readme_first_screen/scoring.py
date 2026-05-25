@@ -335,9 +335,31 @@ def _score_quick_start(facts: ReadmeFacts) -> CategoryScore:
     issues: list[str] = []
     suggestions: list[str] = []
     full = facts.full_text_plain
+    is_curated_list = _looks_like_curated_list(facts)
 
     command_line = facts.first_command_line
-    if command_line is not None and command_line <= FIRST_SCREEN_LINES:
+    if is_curated_list:
+        if _has_list_navigation_signal(facts):
+            score += 8
+            strengths.append("The README has list navigation.")
+        else:
+            issues.append("The list has no obvious browsing or navigation structure.")
+            suggestions.append("Add a table of contents, categories, or an index for browsing the list.")
+
+        if _has_representative_list_item(facts.first_lines):
+            score += 8
+            strengths.append("Representative list entries appear on the first screen.")
+        elif _has_representative_list_item(facts.lines):
+            score += 5
+            issues.append("Representative list entries start after the first screen.")
+            suggestions.append("Move 2-3 representative listed items above the fold.")
+        else:
+            issues.append("No representative listed item was found.")
+            suggestions.append("Show 2-3 representative listed items with links and short descriptions.")
+
+        if re.search(r"\b(how to use this list|contributing|contribution rules?)\b", full):
+            score += 2
+    elif command_line is not None and command_line <= FIRST_SCREEN_LINES:
         score += 10
         strengths.append("A runnable command appears on the first screen.")
     elif command_line is not None:
@@ -345,21 +367,21 @@ def _score_quick_start(facts: ReadmeFacts) -> CategoryScore:
         strengths.append("A runnable command is included.")
         issues.append("The first runnable command appears after the first screen.")
         suggestions.append("Move one install or run command above the fold.")
-    elif _looks_like_curated_list(facts):
-        if not _has_list_navigation_signal(facts):
-            issues.append("The list has no obvious browsing or navigation structure.")
-            suggestions.append("Add a table of contents, categories, or an index for browsing the list.")
     else:
         issues.append("No install or run command was found.")
         suggestions.append("Add a copy-paste install command and one copy-paste run command.")
 
-    if re.search(r"\b(install|installation|quick start|usage|getting started)\b", full):
+    if is_curated_list:
+        pass
+    elif re.search(r"\b(install|installation|quick start|usage|getting started)\b", full):
         score += 4
     else:
         issues.append("There is no obvious quick start or usage section.")
         suggestions.append("Add a short 'Quick start' or 'Usage' section.")
 
-    if _has_example_signal(facts.text):
+    if is_curated_list:
+        pass
+    elif _has_example_signal(facts.text):
         score += 4
         strengths.append("The README includes an example.")
     else:
@@ -594,6 +616,21 @@ def _looks_like_curated_list(facts: ReadmeFacts) -> bool:
 
 def _has_list_navigation_signal(facts: ReadmeFacts) -> bool:
     return _matches_any(facts.full_text_plain, LIST_NAVIGATION_PATTERNS)
+
+
+def _has_representative_list_item(lines: list[str]) -> bool:
+    linked_items = 0
+    for line in lines:
+        stripped = line.strip()
+        if not re.match(r"^(?:[-*+]|\d+[.)])\s+", stripped):
+            continue
+        if not re.search(r"\[[^\]]+\]\([^)]+\)", stripped):
+            continue
+        if re.search(r"\s[-:]\s+\S+", stripped) or len(_plain_text(stripped)) >= 40:
+            linked_items += 1
+        if linked_items >= 2:
+            return True
+    return False
 
 
 def _has_demo_image_signal(markdown: str) -> bool:
