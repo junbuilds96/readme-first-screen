@@ -32,6 +32,17 @@ Awesome modern lightweight flexible thing.
 """
 
 
+H1_BADGE_WALL_WITHOUT_DEFINITION_README = """# Gemini CLI
+
+![build](https://example.com/build.svg)
+![coverage](https://example.com/coverage.svg)
+![version](https://example.com/version.svg)
+![downloads](https://example.com/downloads.svg)
+
+An open-source AI agent that brings Gemini to your terminal.
+"""
+
+
 DENSE_STRONG_WHAT_IS_IT_README = """# Bounty Sieve
 ![ci](https://example.com/ci.svg)
 ![coverage](https://example.com/cov.svg)
@@ -74,6 +85,19 @@ def test_human_report_prioritizes_weak_first_screen_fixes():
     assert _section_bullets(output, "Evidence") == [
         "Badges before explanation: 4",
     ]
+
+
+def test_human_report_keeps_existing_h1_when_badges_precede_missing_definition():
+    report = score_readme(H1_BADGE_WALL_WITHOUT_DEFINITION_README)
+    output = render_human(report)
+
+    assert "The first screen names the project." in report.strengths
+    assert "The first screen does not clearly say what the project is." in report.issues
+    assert "Badge wall appears before the explanation." in report.issues
+    assert _section_bullets(output, "Fix first")[0] == (
+        "Keep the H1, add a one-sentence definition below it, and move badges after that opening explanation."
+    )
+    assert "Replace the badge wall with a project name" not in output
 
 
 def test_human_report_shows_no_urgent_fix_for_strong_report():

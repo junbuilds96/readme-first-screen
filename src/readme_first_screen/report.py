@@ -56,9 +56,9 @@ def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
         or metadata.get("badges_before_explanation", 0) >= 4
     )
     what_is_it_strengths = set(report.categories["what_is_it"].strengths)
+    has_project_name = "The first screen names the project." in what_is_it_strengths
     has_name_and_definition = (
-        "The first screen names the project." in what_is_it_strengths
-        and "The opening explains what the project is." in what_is_it_strengths
+        has_project_name and "The opening explains what the project is." in what_is_it_strengths
     )
     missing_definition = (
         "The first screen does not clearly say what the project is." in issues
@@ -70,9 +70,14 @@ def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
     )
     dense_first_screen = "The first screen is dense or mostly structural markup." in issues
     if badge_wall and missing_definition:
-        candidates.append(
-            "Replace the badge wall with a project name and one-sentence definition at the top."
-        )
+        if has_project_name:
+            candidates.append(
+                "Keep the H1, add a one-sentence definition below it, and move badges after that opening explanation."
+            )
+        else:
+            candidates.append(
+                "Replace the badge wall with a project name and one-sentence definition at the top."
+            )
     elif missing_definition:
         candidates.append(
             "Open with a project name and one-sentence definition before any secondary detail."
