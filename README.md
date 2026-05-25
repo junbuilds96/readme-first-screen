@@ -41,6 +41,9 @@ Gate CI on a minimum score:
 readme-first-screen --fail-under 80 README.md
 ```
 
+For a copy-paste GitHub Actions quality gate and local preflight command, see
+[CI Quality Gate](docs/ci.md).
+
 ## Sample output
 
 ```text
