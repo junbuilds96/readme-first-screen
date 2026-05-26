@@ -446,6 +446,126 @@ def test_cli_fix_plan_outputs_markdown_plan_for_weak_readme(tmp_path):
     assert result.stderr == ""
 
 
+def test_cli_fix_json_outputs_structured_remediation_items(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--fix-json", str(readme))
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert data == {
+        "schema_version": "1.0",
+        "source": str(readme),
+        "total_score": 26,
+        "grade": "unclear",
+        "evidence": {
+            "first_screen": {
+                "line_limit": 30,
+                "char_limit": 2400,
+                "lines_seen": 5,
+                "chars_seen": 142,
+            },
+            "items": [
+                "First heading line: 1",
+                "Badges before explanation: 3",
+            ],
+        },
+        "fixes": [
+            {
+                "priority": 1,
+                "issue": "The first screen does not clearly say what the project is.",
+                "suggestion": (
+                    "Open with a project name and one-sentence definition "
+                    "before any secondary detail."
+                ),
+                "section": "what_is_it",
+                "rule_id": "what_is_it",
+            },
+            {
+                "priority": 2,
+                "issue": "No clear target user is named.",
+                "suggestion": "Put the target user and main outcome in the opening paragraph.",
+                "section": "target_user",
+                "rule_id": "target_user",
+            },
+            {
+                "priority": 3,
+                "issue": "No install or run command was found.",
+                "suggestion": "Add a copy-paste install or run command to the first screen.",
+                "section": "quick_start",
+                "rule_id": "quick_start",
+            },
+        ],
+    }
+    assert result.stderr == ""
+
+
+def test_cli_fix_json_output_can_be_written_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "artifacts" / "fixes.json"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    expected = run_cli("--fix-json", str(readme))
+    result = run_cli("--fix-json", "--out", str(out), str(readme))
+    report_text = out.read_text(encoding="utf-8")
+    data = json.loads(report_text)
+
+    assert expected.returncode == 0
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert report_text == expected.stdout
+    assert data["fixes"][0]["priority"] == 1
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected_error"),
+    [
+        (("--json",), "--fix-json cannot be used with --json"),
+        (("--sarif",), "--fix-json cannot be used with --sarif"),
+        (("--summary",), "--fix-json cannot be used with --summary"),
+        (("--fix-plan",), "--fix-json cannot be used with --fix-plan"),
+        (
+            ("--format", "github-step-summary"),
+            "--format github-step-summary cannot be used with --fix-json",
+        ),
+        (("--batch",), "--fix-json cannot be used with --batch"),
+    ],
+)
+def test_cli_fix_json_rejects_incompatible_options(
+    tmp_path,
+    extra_args,
+    expected_error,
+):
+    readme = tmp_path / "README.md"
+    batch = tmp_path / "batch.txt"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n", encoding="utf-8")
+
+    if extra_args == ("--batch",):
+        result = run_cli("--fix-json", "--batch", str(batch))
+    else:
+        result = run_cli("--fix-json", *extra_args, str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert expected_error in result.stderr
+
+
+def test_cli_fix_json_rejects_baseline(tmp_path):
+    current = tmp_path / "README.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--fix-json", "--baseline", str(baseline), str(current))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--baseline cannot be used with --fix-json" in result.stderr
+
+
 def test_cli_fix_plan_rejects_json(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(README, encoding="utf-8")

@@ -1,9 +1,17 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from typing import Any
 
 from .models import CATEGORY_NAMES, ScoreReport
+
+
+@dataclass(frozen=True)
+class FixCandidate:
+    suggestion: str
+    issue: str | None = None
+    rule_id: str | None = None
 
 
 def render_batch_human(report: Mapping[str, Any]) -> str:
@@ -221,6 +229,31 @@ def render_fix_plan(report: ScoreReport) -> str:
     )
 
 
+def build_fix_json_report(report: ScoreReport) -> dict[str, Any]:
+    fixes = []
+    for priority, candidate in enumerate(_fix_first_candidates(report), start=1):
+        fixes.append(
+            {
+                "priority": priority,
+                "issue": candidate.issue,
+                "suggestion": candidate.suggestion,
+                "section": candidate.rule_id,
+                "rule_id": candidate.rule_id,
+            }
+        )
+    return {
+        "schema_version": "1.0",
+        "source": report.source,
+        "total_score": report.total_score,
+        "grade": report.grade,
+        "evidence": {
+            "first_screen": report.first_screen,
+            "items": list(_evidence_items(report)),
+        },
+        "fixes": fixes,
+    }
+
+
 def _github_step_summary_body(
     report: ScoreReport,
     comparison: Mapping[str, int | str] | None = None,
@@ -283,12 +316,26 @@ def _priority_section_title(report: ScoreReport) -> str:
 
 
 def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
+    return tuple(candidate.suggestion for candidate in _fix_first_candidates(report))
+
+
+def _fix_first_candidates(report: ScoreReport) -> tuple[FixCandidate, ...]:
     if not report.issues:
         return ()
 
     metadata = report.metadata
     issues = set(report.issues)
-    candidates: list[str] = []
+    candidates: list[FixCandidate] = []
+
+    def append(suggestion: str, issue_names: tuple[str, ...] = ()) -> None:
+        issue = _first_available_issue(report, issue_names)
+        candidates.append(
+            FixCandidate(
+                suggestion=suggestion,
+                issue=issue,
+                rule_id=rule_id_for_issue(issue, report) if issue is not None else None,
+            )
+        )
 
     badge_wall = (
         "Badge wall appears before the explanation." in issues
@@ -310,28 +357,41 @@ def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
     dense_first_screen = "The first screen is dense or mostly structural markup." in issues
     if badge_wall and missing_definition:
         if has_project_name:
-            candidates.append(
-                "Keep the H1, add a one-sentence definition below it, and move badges after that opening explanation."
+            append(
+                "Keep the H1, add a one-sentence definition below it, and move badges after that opening explanation.",
+                (
+                    "The first screen does not clearly say what the project is.",
+                    "Badge wall appears before the explanation.",
+                ),
             )
         else:
-            candidates.append(
-                "Replace the badge wall with a project name and one-sentence definition at the top."
+            append(
+                "Replace the badge wall with a project name and one-sentence definition at the top.",
+                (
+                    "The first screen does not clearly say what the project is.",
+                    "Badge wall appears before the explanation.",
+                    "The project name or first heading starts too late.",
+                ),
             )
     elif missing_definition:
-        candidates.append(
-            "Open with a project name and one-sentence definition before any secondary detail."
+        append(
+            "Open with a project name and one-sentence definition before any secondary detail.",
+            ("The first screen does not clearly say what the project is.",),
         )
     elif late_explanation:
-        candidates.append(
-            "Put a one- or two-sentence explanation before badges, screenshots, and tables."
+        append(
+            "Put a one- or two-sentence explanation before badges, screenshots, and tables.",
+            ("The first plain-language explanation starts too late.",),
         )
     elif badge_wall:
-        candidates.append(
-            "Move badges below the opening explanation; keep at most one or two above the fold."
+        append(
+            "Move badges below the opening explanation; keep at most one or two above the fold.",
+            ("Badge wall appears before the explanation.",),
         )
     if dense_first_screen and has_name_and_definition:
-        candidates.append(
-            "Use a short intro, short sections, and one compact example before deeper detail."
+        append(
+            "Use a short intro, short sections, and one compact example before deeper detail.",
+            ("The first screen is dense or mostly structural markup.",),
         )
 
     if (
@@ -340,30 +400,101 @@ def _fix_first_items(report: ScoreReport) -> tuple[str, ...]:
         or "The README does not state the problem or outcome clearly." in issues
         or "The value is present, but it lands after the first screen." in issues
     ):
-        candidates.append("Put the target user and main outcome in the opening paragraph.")
+        append(
+            "Put the target user and main outcome in the opening paragraph.",
+            (
+                "No clear target user is named.",
+                "The target user appears, but not on the first screen.",
+                "The README does not state the problem or outcome clearly.",
+                "The value is present, but it lands after the first screen.",
+            ),
+        )
 
     if "The first runnable command appears after the first screen." in issues:
-        candidates.append("Move one copy-paste install or run command above the fold.")
+        append(
+            "Move one copy-paste install or run command above the fold.",
+            ("The first runnable command appears after the first screen.",),
+        )
     elif "No install or run command was found." in issues:
-        candidates.append("Add a copy-paste install or run command to the first screen.")
+        append(
+            "Add a copy-paste install or run command to the first screen.",
+            ("No install or run command was found.",),
+        )
 
     if (
         "The project name or first heading starts too late." in issues
         or "The first heading starts too late." in issues
     ):
-        candidates.append("Start with a concise H1 project name in the first three lines.")
+        append(
+            "Start with a concise H1 project name in the first three lines.",
+            (
+                "The project name or first heading starts too late.",
+                "The first heading starts too late.",
+            ),
+        )
 
     for category_name in _weakest_category_names(report):
         category = report.categories[category_name]
         if category.suggestions:
-            candidates.append(category.suggestions[0])
+            issue = category.issues[0] if category.issues else None
+            candidates.append(
+                FixCandidate(
+                    suggestion=category.suggestions[0],
+                    issue=issue,
+                    rule_id=category_name,
+                )
+            )
 
     if not candidates:
-        candidates.extend(report.suggestions[:3])
+        candidates.extend(
+            FixCandidate(suggestion=suggestion)
+            for suggestion in report.suggestions[:3]
+        )
     if not candidates:
-        candidates.extend(report.issues[:3])
+        candidates.extend(
+            FixCandidate(
+                suggestion=issue,
+                issue=issue,
+                rule_id=rule_id_for_issue(issue, report),
+            )
+            for issue in report.issues[:3]
+        )
 
-    return tuple(dict.fromkeys(candidates))[:3]
+    unique_candidates = {}
+    for candidate in candidates:
+        unique_candidates.setdefault(candidate.suggestion, candidate)
+    return tuple(unique_candidates.values())[:3]
+
+
+def _first_available_issue(
+    report: ScoreReport,
+    issue_names: tuple[str, ...],
+) -> str | None:
+    issues = set(report.issues)
+    for issue in issue_names:
+        if issue in issues:
+            return issue
+    return None
+
+
+def rule_id_for_issue(issue: str, report: ScoreReport) -> str:
+    for name in CATEGORY_NAMES:
+        if issue in report.categories[name].issues:
+            return name
+    return "readme_first_screen"
+
+
+def suggestion_for_issue(issue: str, report: ScoreReport) -> str | None:
+    for category in report.categories.values():
+        if issue not in category.issues or not category.suggestions:
+            continue
+        issue_index = list(category.issues).index(issue)
+        if issue_index < len(category.suggestions):
+            return category.suggestions[issue_index]
+        return category.suggestions[0]
+    if report.suggestions:
+        return report.suggestions[0]
+    return None
 
 
 def _weakest_category_names(report: ScoreReport) -> list[str]:

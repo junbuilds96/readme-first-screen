@@ -9,8 +9,9 @@ from urllib.parse import urlparse
 
 from . import __version__
 from .input import ReadmeInputError, load_readme
-from .models import CATEGORY_NAMES, ScoreReport
+from .models import ScoreReport
 from .report import (
+    build_fix_json_report,
     render_batch_github_step_summary,
     render_batch_human,
     render_batch_summary,
@@ -18,6 +19,8 @@ from .report import (
     render_github_step_summary,
     render_human,
     render_summary,
+    rule_id_for_issue,
+    suggestion_for_issue,
 )
 from .scoring import score_readme
 
@@ -68,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--fix-plan",
         action="store_true",
         help="Print a concise Markdown remediation plan instead of the human-readable report.",
+    )
+    parser.add_argument(
+        "--fix-json",
+        action="store_true",
+        help=(
+            "Print deterministic JSON remediation items instead of the "
+            "human-readable report."
+        ),
     )
     parser.add_argument(
         "--format",
@@ -121,14 +132,24 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--summary cannot be used with --json")
     if args.fix_plan and args.json:
         parser.error("--fix-plan cannot be used with --json")
+    if args.fix_json and args.json:
+        parser.error("--fix-json cannot be used with --json")
     if args.sarif and args.json:
         parser.error("--sarif cannot be used with --json")
     if args.summary and args.sarif:
         parser.error("--summary cannot be used with --sarif")
     if args.fix_plan and args.sarif:
         parser.error("--fix-plan cannot be used with --sarif")
+    if args.fix_json and args.sarif:
+        parser.error("--fix-json cannot be used with --sarif")
     if args.fix_plan and args.summary:
         parser.error("--fix-plan cannot be used with --summary")
+    if args.fix_json and args.summary:
+        parser.error("--fix-json cannot be used with --summary")
+    if args.fix_json and args.fix_plan:
+        parser.error("--fix-json cannot be used with --fix-plan")
+    if args.fix_json and args.baseline is not None:
+        parser.error("--baseline cannot be used with --fix-json")
     if args.format == "github-step-summary":
         if args.json:
             parser.error("--format github-step-summary cannot be used with --json")
@@ -136,6 +157,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--format github-step-summary cannot be used with --sarif")
         if args.fix_plan:
             parser.error("--format github-step-summary cannot be used with --fix-plan")
+        if args.fix_json:
+            parser.error("--format github-step-summary cannot be used with --fix-json")
         if args.summary:
             parser.error("--format github-step-summary cannot be used with --summary")
 
@@ -146,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--github-annotations cannot be used with --batch")
         if args.fix_plan:
             parser.error("--fix-plan cannot be used with --batch")
+        if args.fix_json:
+            parser.error("--fix-json cannot be used with --batch")
         if args.source is not None:
             parser.error("source cannot be used with --batch")
         if args.baseline is not None:
@@ -183,6 +208,10 @@ def main(argv: list[str] | None = None) -> int:
         rendered_output = render_sarif(report, args.source)
     elif args.fix_plan:
         rendered_output = render_fix_plan(report)
+    elif args.fix_json:
+        rendered_output = (
+            json.dumps(build_fix_json_report(report), indent=2, sort_keys=True) + "\n"
+        )
     elif args.format == "github-step-summary":
         rendered_output = render_github_step_summary(report, comparison=comparison)
     else:
@@ -345,7 +374,7 @@ def render_sarif(
     local_file = _is_local_file_source(original_source)
 
     for issue in report.issues[:limit]:
-        rule_id = _rule_id_for_issue(issue, report)
+        rule_id = rule_id_for_issue(issue, report)
         rules.setdefault(
             rule_id,
             {
@@ -396,31 +425,11 @@ def render_sarif(
     return json.dumps(sarif_log, indent=2, sort_keys=True) + "\n"
 
 
-def _rule_id_for_issue(issue: str, report: ScoreReport) -> str:
-    for name in CATEGORY_NAMES:
-        if issue in report.categories[name].issues:
-            return name
-    return "readme_first_screen"
-
-
 def _annotation_message(issue: str, report: ScoreReport) -> str:
-    suggestion = _suggestion_for_issue(issue, report)
+    suggestion = suggestion_for_issue(issue, report)
     if suggestion is None:
         return issue
     return f"{issue} Suggested fix: {suggestion}"
-
-
-def _suggestion_for_issue(issue: str, report: ScoreReport) -> str | None:
-    for category in report.categories.values():
-        if issue not in category.issues or not category.suggestions:
-            continue
-        issue_index = list(category.issues).index(issue)
-        if issue_index < len(category.suggestions):
-            return category.suggestions[issue_index]
-        return category.suggestions[0]
-    if report.suggestions:
-        return report.suggestions[0]
-    return None
 
 
 def _annotation_line(issue: str, metadata: dict[str, Any]) -> int:

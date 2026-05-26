@@ -29,6 +29,12 @@ Generate a concise Markdown remediation plan:
 readme-first-screen --fix-plan README.md
 ```
 
+Generate deterministic JSON remediation items:
+
+```bash
+readme-first-screen --fix-json README.md
+```
+
 Check a public GitHub repository:
 
 ```bash
@@ -121,10 +127,12 @@ Actionable suggestions:
 
 `--json` prints a stable JSON object:
 
-`--summary`, `--fix-plan`, and `--format github-step-summary` are alternate
-report renderings and are rejected when used with `--json`.
-`--format github-step-summary` is also rejected with `--sarif`, `--fix-plan`,
-and `--summary` because each selects a complete report rendering.
+`--fix-json` prints a smaller remediation JSON object with ranked first-screen
+fixes for a single README. `--summary`, `--fix-plan`, `--fix-json`, and
+`--format github-step-summary` are alternate report renderings and are rejected
+when used with `--json`. `--format github-step-summary` is also rejected with
+`--sarif`, `--fix-plan`, `--fix-json`, and `--summary` because each selects a
+complete report rendering.
 
 ```json
 {
