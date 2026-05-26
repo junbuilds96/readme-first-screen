@@ -11,9 +11,11 @@ from . import __version__
 from .input import ReadmeInputError, load_readme
 from .models import CATEGORY_NAMES, ScoreReport
 from .report import (
+    render_batch_github_step_summary,
     render_batch_human,
     render_batch_summary,
     render_fix_plan,
+    render_github_step_summary,
     render_human,
     render_summary,
 )
@@ -68,6 +70,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="Print a concise Markdown remediation plan instead of the human-readable report.",
     )
     parser.add_argument(
+        "--format",
+        choices=("github-step-summary",),
+        metavar="NAME",
+        help=(
+            "Render an alternate output format. Use 'github-step-summary' "
+            "for concise Markdown suitable for GitHub Actions job summaries."
+        ),
+    )
+    parser.add_argument(
         "--out",
         metavar="PATH",
         help="Write the rendered report to PATH instead of printing it to stdout.",
@@ -118,6 +129,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fix-plan cannot be used with --sarif")
     if args.fix_plan and args.summary:
         parser.error("--fix-plan cannot be used with --summary")
+    if args.format == "github-step-summary":
+        if args.json:
+            parser.error("--format github-step-summary cannot be used with --json")
+        if args.sarif:
+            parser.error("--format github-step-summary cannot be used with --sarif")
+        if args.fix_plan:
+            parser.error("--format github-step-summary cannot be used with --fix-plan")
+        if args.summary:
+            parser.error("--format github-step-summary cannot be used with --summary")
 
     if args.batch is not None:
         if args.sarif:
@@ -163,6 +183,8 @@ def main(argv: list[str] | None = None) -> int:
         rendered_output = render_sarif(report, args.source)
     elif args.fix_plan:
         rendered_output = render_fix_plan(report)
+    elif args.format == "github-step-summary":
+        rendered_output = render_github_step_summary(report, comparison=comparison)
     else:
         rendered_output = render_human(report, comparison=comparison)
         if args.summary:
@@ -184,9 +206,14 @@ def run_batch(args: argparse.Namespace) -> int:
         print(f"readme-first-screen: {exc}", file=sys.stderr)
         return 2
 
-    report = build_batch_report(sources)
+    report = build_batch_report(
+        sources,
+        include_score_reports=args.format == "github-step-summary",
+    )
     if args.json:
         rendered_output = json.dumps(report, indent=2, sort_keys=True) + "\n"
+    elif args.format == "github-step-summary":
+        rendered_output = render_batch_github_step_summary(report)
     else:
         rendered_output = render_batch_human(report)
         if args.summary:
@@ -216,7 +243,11 @@ def load_batch_sources(path: str) -> list[str]:
     return sources
 
 
-def build_batch_report(sources: list[str]) -> dict[str, Any]:
+def build_batch_report(
+    sources: list[str],
+    *,
+    include_score_reports: bool = False,
+) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     score_sum = 0
     ok_count = 0
@@ -239,14 +270,15 @@ def build_batch_report(sources: list[str]) -> dict[str, Any]:
         score_report = score_readme(text, source=source_label)
         ok_count += 1
         score_sum += score_report.total_score
-        items.append(
-            {
-                "source": source,
-                "status": "ok",
-                "total_score": score_report.total_score,
-                "grade": score_report.grade,
-            }
-        )
+        item: dict[str, Any] = {
+            "source": source,
+            "status": "ok",
+            "total_score": score_report.total_score,
+            "grade": score_report.grade,
+        }
+        if include_score_reports:
+            item["_score_report"] = score_report
+        items.append(item)
 
     average_score = round(score_sum / ok_count, 2) if ok_count else None
     return {

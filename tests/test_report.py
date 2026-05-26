@@ -1,4 +1,8 @@
-from readme_first_screen.report import render_human
+from readme_first_screen.report import (
+    render_batch_github_step_summary,
+    render_github_step_summary,
+    render_human,
+)
 from readme_first_screen.scoring import score_readme
 
 
@@ -130,6 +134,76 @@ def test_human_report_does_not_recommend_definition_when_what_is_it_is_strong():
         "Use a short intro, short sections, and one compact example before deeper detail.",
     ]
     assert "Open with a project name and one-sentence definition" not in output
+
+
+def test_github_step_summary_renders_concise_markdown():
+    report = score_readme(WEAK_README)
+    output = render_github_step_summary(
+        report,
+        comparison={
+            "baseline_source": "README-before.md",
+            "baseline_total_score": 10,
+            "current_total_score": report.total_score,
+            "delta": report.total_score - 10,
+            "result": "improved",
+        },
+    )
+
+    assert output.startswith("# README First-Screen Summary\n")
+    assert f"| Score | {report.total_score}/{report.max_score} |" in output
+    assert "| First-screen scope |" in output
+    assert "## Comparison" in output
+    assert f"| 10/{report.max_score} | {report.total_score}/{report.max_score} |" in output
+    assert output.index("## Top Priority Fixes") < output.index("## Section Scores")
+    assert (
+        "- Replace the badge wall with a project name and one-sentence definition at the top."
+        in output
+    )
+    assert "| What Is It |" in output
+
+
+def test_batch_github_step_summary_includes_item_details():
+    weak_report = score_readme(WEAK_README, source="README|weak.md")
+    strong_report = score_readme(STRONG_README, source="README.md")
+    output = render_batch_github_step_summary(
+        {
+            "schema_version": "1.0",
+            "item_count": 3,
+            "ok_count": 2,
+            "error_count": 1,
+            "average_score": 62.0,
+            "items": [
+                {
+                    "source": "README|weak.md",
+                    "status": "ok",
+                    "total_score": weak_report.total_score,
+                    "grade": weak_report.grade,
+                    "_score_report": weak_report,
+                },
+                {
+                    "source": "README.md",
+                    "status": "ok",
+                    "total_score": strong_report.total_score,
+                    "grade": strong_report.grade,
+                    "_score_report": strong_report,
+                },
+                {
+                    "source": "missing.md",
+                    "status": "error",
+                    "error": "README file not found: missing.md",
+                },
+            ],
+        }
+    )
+
+    assert output.startswith("# README First-Screen Batch Summary\n")
+    assert "| Average score | 62.0/100 |" in output
+    assert "| README\\|weak.md | ok |" in output
+    assert "| missing.md | error | n/a | README file not found: missing.md |" in output
+    assert "<details>" in output
+    assert "<summary>README|weak.md:" in output
+    assert "## Top Priority Fixes" in output
+    assert "## Section Scores" in output
 
 
 def _section_bullets(output: str, title: str) -> list[str]:

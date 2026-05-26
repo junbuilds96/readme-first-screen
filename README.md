@@ -59,6 +59,12 @@ Write SARIF for code scanning consumers:
 readme-first-screen --sarif --out artifacts/readme-first-screen.sarif README.md
 ```
 
+Write concise Markdown to a GitHub Actions job summary:
+
+```bash
+readme-first-screen --format github-step-summary --out "$GITHUB_STEP_SUMMARY" README.md
+```
+
 Gate CI on a minimum score:
 
 ```bash
@@ -70,6 +76,7 @@ Evaluate several README sources in one deterministic batch:
 ```bash
 readme-first-screen --batch examples/batch-sources.txt
 readme-first-screen --json --batch examples/batch-sources.txt --out artifacts/readme-batch.json
+readme-first-screen --format github-step-summary --batch examples/batch-sources.txt --out "$GITHUB_STEP_SUMMARY"
 ```
 
 Compare a README rewrite against a before version:
@@ -114,8 +121,10 @@ Actionable suggestions:
 
 `--json` prints a stable JSON object:
 
-`--summary` and `--fix-plan` are human-output only and are rejected when used
-with `--json`.
+`--summary`, `--fix-plan`, and `--format github-step-summary` are alternate
+report renderings and are rejected when used with `--json`.
+`--format github-step-summary` is also rejected with `--sarif`, `--fix-plan`,
+and `--summary` because each selects a complete report rendering.
 
 ```json
 {

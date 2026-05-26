@@ -339,6 +339,80 @@ def test_cli_single_summary_output(tmp_path):
     assert result.stderr == ""
 
 
+def test_cli_github_step_summary_output_includes_baseline_comparison(tmp_path):
+    current = tmp_path / "README.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli(
+        "--format",
+        "github-step-summary",
+        "--baseline",
+        str(baseline),
+        str(current),
+    )
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("# README First-Screen Summary\n")
+    assert "| Score | 98/100 |" in result.stdout
+    assert "| Grade | excellent |" in result.stdout
+    assert "| First-screen scope | 18/30 lines, 298/2400 chars |" in result.stdout
+    assert "## Comparison" in result.stdout
+    assert "| 26/100 | 98/100 | +72 | improved |" in result.stdout
+    assert "## Top Priority Fixes" in result.stdout
+    assert "## Section Scores" in result.stdout
+    assert "| What Is It | 18/20 |" in result.stdout
+    assert "README first-screen score:" not in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_github_step_summary_output_can_be_written_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "github-step-summary.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli(
+        "--format",
+        "github-step-summary",
+        "--out",
+        str(out),
+        str(readme),
+    )
+    report_text = out.read_text(encoding="utf-8")
+
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert report_text.startswith("# README First-Screen Summary\n")
+    assert "| Score | 26/100 |" in report_text
+    assert "- Open with a project name and one-sentence definition" in report_text
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected_error"),
+    [
+        (("--json",), "--format github-step-summary cannot be used with --json"),
+        (("--sarif",), "--format github-step-summary cannot be used with --sarif"),
+        (("--fix-plan",), "--format github-step-summary cannot be used with --fix-plan"),
+        (("--summary",), "--format github-step-summary cannot be used with --summary"),
+    ],
+)
+def test_cli_github_step_summary_rejects_incompatible_options(
+    tmp_path,
+    extra_args,
+    expected_error,
+):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--format", "github-step-summary", *extra_args, str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert expected_error in result.stderr
+
+
 def test_cli_summary_rejects_json(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(README, encoding="utf-8")
@@ -433,6 +507,31 @@ def test_cli_batch_summary_output(tmp_path):
         "Summary: item_count=2, ok_count=2, error_count=0, "
         f"average_score=62.0/100, lowest_ok={weak} (26/100 unclear)\n"
     )
+    assert result.stderr == ""
+
+
+def test_cli_batch_github_step_summary_output(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    batch = tmp_path / "batch.txt"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+    batch.write_text(f"{good}\n{weak}\n", encoding="utf-8")
+
+    result = run_cli("--format", "github-step-summary", "--batch", str(batch))
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("# README First-Screen Batch Summary\n")
+    assert "| Sources | 2 |" in result.stdout
+    assert "| OK | 2 |" in result.stdout
+    assert "| Errors | 0 |" in result.stdout
+    assert "| Average score | 62.0/100 |" in result.stdout
+    assert f"| {good} | ok | 98/100 | excellent |" in result.stdout
+    assert f"| {weak} | ok | 26/100 | unclear |" in result.stdout
+    assert f"<summary>{weak}: 26/100 unclear</summary>" in result.stdout
+    assert "| First-screen scope | 5/30 lines," in result.stdout
+    assert "## Top Priority Fixes" in result.stdout
+    assert "## Section Scores" in result.stdout
     assert result.stderr == ""
 
 

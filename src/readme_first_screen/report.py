@@ -61,6 +61,59 @@ def render_batch_summary(report: Mapping[str, Any]) -> str:
     )
 
 
+def render_batch_github_step_summary(report: Mapping[str, Any]) -> str:
+    average_score = report["average_score"]
+    average_text = "n/a" if average_score is None else f"{float(average_score):.1f}/100"
+    lines = [
+        "# README First-Screen Batch Summary",
+        "",
+        "| Metric | Value |",
+        "| --- | ---: |",
+        f"| Sources | {report['item_count']} |",
+        f"| OK | {report['ok_count']} |",
+        f"| Errors | {report['error_count']} |",
+        f"| Average score | {average_text} |",
+        "",
+        "## Results",
+        "",
+        "| Source | Status | Score | Grade |",
+        "| --- | --- | ---: | --- |",
+    ]
+
+    for item in report["items"]:
+        source = _markdown_table_cell(str(item["source"]))
+        if item["status"] == "ok":
+            lines.append(
+                f"| {source} | ok | {item['total_score']}/100 | {item['grade']} |"
+            )
+        else:
+            error = _markdown_table_cell(str(item["error"]))
+            lines.append(f"| {source} | error | n/a | {error} |")
+
+    for item in report["items"]:
+        if item["status"] != "ok":
+            continue
+        score_report = item.get("_score_report")
+        if not isinstance(score_report, ScoreReport):
+            continue
+        lines.extend(
+            [
+                "",
+                "<details>",
+                (
+                    f"<summary>{_markdown_inline_text(str(item['source']))}: "
+                    f"{score_report.total_score}/{score_report.max_score} "
+                    f"{score_report.grade}</summary>"
+                ),
+                "",
+                *_github_step_summary_body(score_report),
+                "</details>",
+            ]
+        )
+
+    return "\n".join(lines) + "\n"
+
+
 def _plural(count: int, singular: str) -> str:
     if count == 1:
         return singular
@@ -124,6 +177,18 @@ def render_summary(report: ScoreReport) -> str:
     )
 
 
+def render_github_step_summary(
+    report: ScoreReport,
+    comparison: Mapping[str, int | str] | None = None,
+) -> str:
+    lines = [
+        "# README First-Screen Summary",
+        "",
+        *_github_step_summary_body(report, comparison=comparison),
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def render_fix_plan(report: ScoreReport) -> str:
     evidence = _evidence_items(report)
     fixes = _fix_first_items(report)
@@ -154,6 +219,61 @@ def render_fix_plan(report: ScoreReport) -> str:
             "",
         ]
     )
+
+
+def _github_step_summary_body(
+    report: ScoreReport,
+    comparison: Mapping[str, int | str] | None = None,
+) -> list[str]:
+    lines = [
+        "| Metric | Value |",
+        "| --- | --- |",
+        f"| Score | {report.total_score}/{report.max_score} |",
+        f"| Grade | {report.grade} |",
+        (
+            "| First-screen scope | "
+            f"{report.first_screen['lines_seen']}/{report.first_screen['line_limit']} lines, "
+            f"{report.first_screen['chars_seen']}/{report.first_screen['char_limit']} chars |"
+        ),
+    ]
+
+    if comparison is not None:
+        delta = int(comparison["delta"])
+        lines.extend(
+            [
+                "",
+                "## Comparison",
+                "",
+                "| Baseline | Current | Delta | Result |",
+                "| ---: | ---: | ---: | --- |",
+                (
+                    f"| {comparison['baseline_total_score']}/{report.max_score} "
+                    f"| {comparison['current_total_score']}/{report.max_score} "
+                    f"| {delta:+d} | {comparison['result']} |"
+                ),
+            ]
+        )
+
+    fixes = _fix_first_items(report)
+    lines.extend(
+        [
+            "",
+            "## Top Priority Fixes",
+            "",
+            *(_markdown_bullets(fixes) or ["- No urgent first-screen fix found."]),
+            "",
+            "## Section Scores",
+            "",
+            "| Section | Score |",
+            "| --- | ---: |",
+        ]
+    )
+    for name in CATEGORY_NAMES:
+        category = report.categories[name]
+        label = name.replace("_", " ").title()
+        lines.append(f"| {label} | {category.score}/{category.max_score} |")
+    lines.append("")
+    return lines
 
 
 def _priority_section_title(report: ScoreReport) -> str:
@@ -290,6 +410,14 @@ def _section(title: str, values: tuple[str, ...], empty: str) -> list[str]:
 
 def _markdown_bullets(values: tuple[str, ...]) -> list[str]:
     return [f"- {value}" for value in values]
+
+
+def _markdown_table_cell(value: str) -> str:
+    return _markdown_inline_text(value).replace("|", "\\|")
+
+
+def _markdown_inline_text(value: str) -> str:
+    return " ".join(value.split())
 
 
 def _comparison_section(comparison: Mapping[str, int | str], max_score: int) -> list[str]:
