@@ -23,6 +23,12 @@ Append a concise one-line summary after the full human report:
 readme-first-screen --summary README.md
 ```
 
+Generate a concise Markdown remediation plan:
+
+```bash
+readme-first-screen --fix-plan README.md
+```
+
 Check a public GitHub repository:
 
 ```bash
@@ -102,7 +108,8 @@ Actionable suggestions:
 
 `--json` prints a stable JSON object:
 
-`--summary` is human-output only and is rejected when used with `--json`.
+`--summary` and `--fix-plan` are human-output only and are rejected when used
+with `--json`.
 
 ```json
 {

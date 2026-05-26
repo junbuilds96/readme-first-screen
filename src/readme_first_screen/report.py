@@ -124,6 +124,38 @@ def render_summary(report: ScoreReport) -> str:
     )
 
 
+def render_fix_plan(report: ScoreReport) -> str:
+    evidence = _evidence_items(report)
+    fixes = _fix_first_items(report)
+    return "\n".join(
+        [
+            "# README First-Screen Remediation Plan",
+            "",
+            f"**Source:** {report.source}",
+            f"**Score:** {report.total_score}/{report.max_score} ({report.grade})",
+            "",
+            "## First-Screen Evidence",
+            *(_markdown_bullets(evidence) or ["- No source evidence found."]),
+            "",
+            "## Top 3 Priority Fixes",
+            *(_markdown_bullets(fixes) or ["- No urgent first-screen fix found."]),
+            "",
+            "## Suggested Opening Shape",
+            "",
+            "````markdown",
+            "# <Project name>",
+            "",
+            "<Project name> is a <concrete product type> for <target user> that need to <main job or outcome>.",
+            "",
+            "```bash",
+            "<one copy-paste install or run command>",
+            "```",
+            "````",
+            "",
+        ]
+    )
+
+
 def _priority_section_title(report: ScoreReport) -> str:
     if report.grade == "excellent" and report.issues:
         return "Polish opportunities"
@@ -254,6 +286,10 @@ def _section(title: str, values: tuple[str, ...], empty: str) -> list[str]:
     else:
         lines.append(f"  - {empty}")
     return lines
+
+
+def _markdown_bullets(values: tuple[str, ...]) -> list[str]:
+    return [f"- {value}" for value in values]
 
 
 def _comparison_section(comparison: Mapping[str, int | str], max_score: int) -> list[str]:

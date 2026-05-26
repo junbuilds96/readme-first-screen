@@ -12,6 +12,7 @@ from .models import ScoreReport
 from .report import (
     render_batch_human,
     render_batch_summary,
+    render_fix_plan,
     render_human,
     render_summary,
 )
@@ -56,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
         help="Append a concise one-line summary to the human-readable report.",
     )
     parser.add_argument(
+        "--fix-plan",
+        action="store_true",
+        help="Print a concise Markdown remediation plan instead of the human-readable report.",
+    )
+    parser.add_argument(
         "--out",
         metavar="PATH",
         help="Write the rendered report to PATH instead of printing it to stdout.",
@@ -88,8 +94,14 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.summary and args.json:
         parser.error("--summary cannot be used with --json")
+    if args.fix_plan and args.json:
+        parser.error("--fix-plan cannot be used with --json")
+    if args.fix_plan and args.summary:
+        parser.error("--fix-plan cannot be used with --summary")
 
     if args.batch is not None:
+        if args.fix_plan:
+            parser.error("--fix-plan cannot be used with --batch")
         if args.source is not None:
             parser.error("source cannot be used with --batch")
         if args.baseline is not None:
@@ -123,6 +135,8 @@ def main(argv: list[str] | None = None) -> int:
         if comparison is not None:
             output["comparison"] = comparison
         rendered_output = json.dumps(output, indent=2, sort_keys=True) + "\n"
+    elif args.fix_plan:
+        rendered_output = render_fix_plan(report)
     else:
         rendered_output = render_human(report, comparison=comparison)
         if args.summary:

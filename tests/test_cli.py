@@ -177,6 +177,52 @@ def test_cli_summary_rejects_json(tmp_path):
     assert "--summary cannot be used with --json" in result.stderr
 
 
+def test_cli_fix_plan_outputs_markdown_plan_for_weak_readme(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--fix-plan", str(readme))
+
+    assert result.returncode == 0
+    assert result.stdout.startswith("# README First-Screen Remediation Plan\n")
+    assert f"**Source:** {readme}" in result.stdout
+    assert "**Score:** 26/100 (unclear)" in result.stdout
+    assert "## First-Screen Evidence" in result.stdout
+    assert "- First heading line: 1" in result.stdout
+    assert "## Top 3 Priority Fixes" in result.stdout
+    assert (
+        "- Open with a project name and one-sentence definition before any secondary detail."
+        in result.stdout
+    )
+    assert "## Suggested Opening Shape" in result.stdout
+    assert "````markdown" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_fix_plan_rejects_json(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(README, encoding="utf-8")
+
+    result = run_cli("--fix-plan", "--json", str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--fix-plan cannot be used with --json" in result.stderr
+
+
+def test_cli_fix_plan_rejects_batch(tmp_path):
+    readme = tmp_path / "README.md"
+    batch = tmp_path / "batch.txt"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n", encoding="utf-8")
+
+    result = run_cli("--fix-plan", "--batch", str(batch))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--fix-plan cannot be used with --batch" in result.stderr
+
+
 def test_cli_batch_human_output(tmp_path):
     good = tmp_path / "README-good.md"
     weak = tmp_path / "README-weak.md"
