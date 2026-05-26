@@ -77,6 +77,17 @@ Gate CI on a minimum score:
 readme-first-screen --fail-under 80 README.md
 ```
 
+Run from pre-commit on changed Markdown files:
+
+```yaml
+repos:
+  - repo: https://github.com/junbuilds96/readme-first-screen
+    rev: v0.1.0
+    hooks:
+      - id: readme-first-screen
+        args: [--fail-under, "80"]
+```
+
 Evaluate several README sources in one deterministic batch:
 
 ```bash

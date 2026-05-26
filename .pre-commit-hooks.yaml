@@ -1,0 +1,7 @@
+- id: readme-first-screen
+  name: readme-first-screen
+  description: Score whether a README first screen is understandable in 10 seconds.
+  entry: readme-first-screen
+  language: python
+  types_or: [markdown]
+  pass_filenames: true

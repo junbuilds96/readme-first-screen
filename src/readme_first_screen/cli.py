@@ -41,8 +41,9 @@ def build_parser() -> argparse.ArgumentParser:
         description="Score whether a stranger can understand a GitHub README first screen in 10 seconds.",
     )
     parser.add_argument(
-        "source",
-        nargs="?",
+        "sources",
+        nargs="*",
+        metavar="source",
         help="Path to a README/Markdown file, GitHub repo URL, raw URL, or '-' for stdin.",
     )
     parser.add_argument(
@@ -171,17 +172,31 @@ def main(argv: list[str] | None = None) -> int:
             parser.error("--fix-plan cannot be used with --batch")
         if args.fix_json:
             parser.error("--fix-json cannot be used with --batch")
-        if args.source is not None:
+        if args.sources:
             parser.error("source cannot be used with --batch")
         if args.baseline is not None:
             parser.error("--baseline cannot be used with --batch")
         return run_batch(args)
 
-    if args.source is None:
+    if not args.sources:
         parser.error("the following arguments are required: source")
 
+    if len(args.sources) > 1:
+        if args.sarif:
+            parser.error("--sarif cannot be used with multiple sources")
+        if args.github_annotations:
+            parser.error("--github-annotations cannot be used with multiple sources")
+        if args.fix_plan:
+            parser.error("--fix-plan cannot be used with multiple sources")
+        if args.fix_json:
+            parser.error("--fix-json cannot be used with multiple sources")
+        if args.baseline is not None:
+            parser.error("--baseline cannot be used with multiple sources")
+        return run_sources_batch(args, args.sources)
+
+    source = args.sources[0]
     try:
-        text, source_label = load_readme(args.source)
+        text, source_label = load_readme(source)
     except ReadmeInputError as exc:
         print(f"readme-first-screen: {exc}", file=sys.stderr)
         return 2
@@ -205,7 +220,7 @@ def main(argv: list[str] | None = None) -> int:
             output["comparison"] = comparison
         rendered_output = json.dumps(output, indent=2, sort_keys=True) + "\n"
     elif args.sarif:
-        rendered_output = render_sarif(report, args.source)
+        rendered_output = render_sarif(report, source)
     elif args.fix_plan:
         rendered_output = render_fix_plan(report)
     elif args.fix_json:
@@ -221,7 +236,7 @@ def main(argv: list[str] | None = None) -> int:
 
     write_or_print(rendered_output, args.out)
     if args.github_annotations:
-        emit_github_annotations(report, args.source)
+        emit_github_annotations(report, source)
 
     if args.fail_under is not None and report.total_score < args.fail_under:
         return 1
@@ -235,6 +250,10 @@ def run_batch(args: argparse.Namespace) -> int:
         print(f"readme-first-screen: {exc}", file=sys.stderr)
         return 2
 
+    return run_sources_batch(args, sources)
+
+
+def run_sources_batch(args: argparse.Namespace, sources: list[str]) -> int:
     report = build_batch_report(
         sources,
         include_score_reports=args.format == "github-step-summary",

@@ -590,6 +590,90 @@ def test_cli_fix_plan_rejects_batch(tmp_path):
     assert "--fix-plan cannot be used with --batch" in result.stderr
 
 
+
+def test_cli_multiple_positional_sources_use_batch_human_output(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli(str(good), str(weak))
+
+    assert result.returncode == 0
+    assert "README first-screen batch: 2 sources, 2 ok, 0 errors" in result.stdout
+    assert f"  - ok     98/100 excellent {good}" in result.stdout
+    assert f"  - ok     26/100 unclear {weak}" in result.stdout
+    assert result.stderr == ""
+
+
+def test_cli_multiple_positional_sources_support_json_and_fail_under(tmp_path):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+
+    json_result = run_cli("--json", str(good), str(weak))
+    fail_result = run_cli("--fail-under", "80", str(good), str(weak))
+    data = json.loads(json_result.stdout)
+
+    assert json_result.returncode == 0
+    assert data["item_count"] == 2
+    assert data["ok_count"] == 2
+    assert data["items"][0]["source"] == str(good)
+    assert data["items"][1]["source"] == str(weak)
+    assert fail_result.returncode == 1
+    assert "README first-screen batch: 2 sources, 2 ok, 0 errors" in fail_result.stdout
+    assert json_result.stderr == ""
+    assert fail_result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("flag", "expected_error"),
+    [
+        ("--sarif", "--sarif cannot be used with multiple sources"),
+        ("--github-annotations", "--github-annotations cannot be used with multiple sources"),
+        ("--fix-plan", "--fix-plan cannot be used with multiple sources"),
+        ("--fix-json", "--fix-json cannot be used with multiple sources"),
+    ],
+)
+def test_cli_multiple_positional_sources_reject_single_source_modes(tmp_path, flag, expected_error):
+    good = tmp_path / "README-good.md"
+    weak = tmp_path / "README-weak.md"
+    good.write_text(README, encoding="utf-8")
+    weak.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli(flag, str(good), str(weak))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert expected_error in result.stderr
+
+
+def test_cli_multiple_positional_sources_reject_baseline(tmp_path):
+    current = tmp_path / "README.md"
+    second = tmp_path / "README-second.md"
+    baseline = tmp_path / "README-before.md"
+    current.write_text(README, encoding="utf-8")
+    second.write_text(README, encoding="utf-8")
+    baseline.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--baseline", str(baseline), str(current), str(second))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--baseline cannot be used with multiple sources" in result.stderr
+
+
+def test_pre_commit_hook_metadata_is_present():
+    hook_text = (REPO_ROOT / ".pre-commit-hooks.yaml").read_text(encoding="utf-8")
+
+    assert "id: readme-first-screen" in hook_text
+    assert "entry: readme-first-screen" in hook_text
+    assert "language: python" in hook_text
+    assert "types_or: [markdown]" in hook_text
+    assert "pass_filenames: true" in hook_text
+
+
 def test_cli_batch_human_output(tmp_path):
     good = tmp_path / "README-good.md"
     weak = tmp_path / "README-weak.md"
