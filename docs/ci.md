@@ -56,6 +56,19 @@ the score gate exits, so failed runs can still upload the report artifact.
 `--github-annotations` sends warning annotations to the workflow log while
 keeping stdout and the JSON artifact valid.
 
+To publish findings to GitHub code scanning, add a SARIF report and upload step:
+
+```yaml
+      - name: Write README SARIF report
+        run: readme-first-screen --sarif --out artifacts/readme-first-screen.sarif README.md
+
+      - name: Upload README SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: artifacts/readme-first-screen.sarif
+```
+
 ## Local Preflight
 
 Run the same gate before opening a pull request:

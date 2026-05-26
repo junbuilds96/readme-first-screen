@@ -4,6 +4,8 @@ from pathlib import Path
 import subprocess
 import sys
 
+import pytest
+
 
 README = """# Demo CLI
 
@@ -32,6 +34,22 @@ WEAK_README = """# Demo
 ![coverage](https://example.com/coverage.svg)
 ![downloads](https://example.com/downloads.svg)
 """
+
+
+LATE_COMMAND_README = (
+    "# Demo CLI\n"
+    "\n"
+    "Demo CLI is a Python CLI for developers who need to check README files "
+    "before release so you can catch unclear docs.\n"
+    "\n"
+    "## Details\n"
+    "\n"
+    "This section explains enough proof. MIT License. CI runs tests. Demo example output.\n"
+    + "\n" * 25
+    + "```bash\n"
+    "python -m demo --help\n"
+    "```\n"
+)
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -148,6 +166,94 @@ def test_cli_json_output(tmp_path):
         "proof_credibility",
         "visual_clarity",
     }
+
+
+def test_cli_sarif_output_is_parseable_json(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--sarif", str(readme))
+    data = json.loads(result.stdout)
+    run = data["runs"][0]
+
+    assert result.returncode == 0
+    assert data["version"] == "2.1.0"
+    assert run["tool"]["driver"]["name"] == "readme-first-screen"
+    assert run["tool"]["driver"]["rules"]
+    assert run["results"]
+    assert result.stderr == ""
+
+
+def test_cli_sarif_local_file_locations_include_start_line(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(LATE_COMMAND_README, encoding="utf-8")
+    expected_line = LATE_COMMAND_README.splitlines().index("python -m demo --help") + 1
+
+    result = run_cli("--sarif", str(readme))
+    data = json.loads(result.stdout)
+    sarif_result = next(
+        item
+        for item in data["runs"][0]["results"]
+        if item["message"]["text"].startswith("The first runnable command appears")
+    )
+    location = sarif_result["locations"][0]["physicalLocation"]
+
+    assert result.returncode == 0
+    assert location["artifactLocation"]["uri"] == readme.as_posix()
+    assert location["region"]["startLine"] == expected_line
+    assert result.stderr == ""
+
+
+def test_cli_sarif_from_stdin_has_no_locations():
+    result = run_cli("--sarif", "-", input_text=WEAK_README)
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert data["runs"][0]["results"]
+    assert all("locations" not in item for item in data["runs"][0]["results"])
+    assert result.stderr == ""
+
+
+def test_cli_sarif_output_can_be_written_to_file(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "artifacts" / "report.sarif"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    expected = run_cli("--sarif", str(readme))
+    result = run_cli("--sarif", "--out", str(out), str(readme))
+    report_text = out.read_text(encoding="utf-8")
+
+    assert expected.returncode == 0
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert report_text == expected.stdout
+    assert json.loads(report_text)["version"] == "2.1.0"
+    assert result.stderr == ""
+
+
+@pytest.mark.parametrize(
+    ("extra_args", "expected_error"),
+    [
+        (("--json",), "--sarif cannot be used with --json"),
+        (("--summary",), "--summary cannot be used with --sarif"),
+        (("--fix-plan",), "--fix-plan cannot be used with --sarif"),
+        (("--batch",), "--sarif cannot be used with --batch"),
+    ],
+)
+def test_cli_sarif_rejects_incompatible_options(tmp_path, extra_args, expected_error):
+    readme = tmp_path / "README.md"
+    batch = tmp_path / "batch.txt"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n", encoding="utf-8")
+
+    if extra_args == ("--batch",):
+        result = run_cli("--sarif", "--batch", str(batch))
+    else:
+        result = run_cli("--sarif", *extra_args, str(readme))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert expected_error in result.stderr
 
 
 def test_cli_github_annotations_emit_warnings_to_stderr(tmp_path):

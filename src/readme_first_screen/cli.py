@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 
 from . import __version__
 from .input import ReadmeInputError, load_readme
-from .models import ScoreReport
+from .models import CATEGORY_NAMES, ScoreReport
 from .report import (
     render_batch_human,
     render_batch_summary,
@@ -51,6 +51,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--json",
         action="store_true",
         help="Print a stable JSON report instead of the human-readable report.",
+    )
+    parser.add_argument(
+        "--sarif",
+        action="store_true",
+        help="Print a SARIF 2.1.0 report for code-scanning consumers.",
     )
     parser.add_argument(
         "--summary",
@@ -105,10 +110,18 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--summary cannot be used with --json")
     if args.fix_plan and args.json:
         parser.error("--fix-plan cannot be used with --json")
+    if args.sarif and args.json:
+        parser.error("--sarif cannot be used with --json")
+    if args.summary and args.sarif:
+        parser.error("--summary cannot be used with --sarif")
+    if args.fix_plan and args.sarif:
+        parser.error("--fix-plan cannot be used with --sarif")
     if args.fix_plan and args.summary:
         parser.error("--fix-plan cannot be used with --summary")
 
     if args.batch is not None:
+        if args.sarif:
+            parser.error("--sarif cannot be used with --batch")
         if args.github_annotations:
             parser.error("--github-annotations cannot be used with --batch")
         if args.fix_plan:
@@ -146,6 +159,8 @@ def main(argv: list[str] | None = None) -> int:
         if comparison is not None:
             output["comparison"] = comparison
         rendered_output = json.dumps(output, indent=2, sort_keys=True) + "\n"
+    elif args.sarif:
+        rendered_output = render_sarif(report, args.source)
     elif args.fix_plan:
         rendered_output = render_fix_plan(report)
     else:
@@ -285,6 +300,75 @@ def emit_github_annotations(
             f"::warning {property_text}::{_escape_github_message(message)}",
             file=sys.stderr,
         )
+
+
+def render_sarif(
+    report: ScoreReport,
+    original_source: str,
+    *,
+    limit: int = 5,
+) -> str:
+    rules: dict[str, dict[str, Any]] = {}
+    results = []
+    local_file = _is_local_file_source(original_source)
+
+    for issue in report.issues[:limit]:
+        rule_id = _rule_id_for_issue(issue, report)
+        rules.setdefault(
+            rule_id,
+            {
+                "id": rule_id,
+                "name": rule_id.replace("_", " "),
+                "shortDescription": {
+                    "text": f"README first-screen {rule_id.replace('_', ' ')} issue",
+                },
+            },
+        )
+
+        result: dict[str, Any] = {
+            "ruleId": rule_id,
+            "level": "warning",
+            "message": {"text": _annotation_message(issue, report)},
+        }
+        if local_file:
+            result["locations"] = [
+                {
+                    "physicalLocation": {
+                        "artifactLocation": {
+                            "uri": Path(report.source).as_posix(),
+                        },
+                        "region": {
+                            "startLine": _annotation_line(issue, report.metadata),
+                        },
+                    },
+                }
+            ]
+        results.append(result)
+
+    sarif_log = {
+        "$schema": "https://json.schemastore.org/sarif-2.1.0.json",
+        "version": "2.1.0",
+        "runs": [
+            {
+                "tool": {
+                    "driver": {
+                        "name": "readme-first-screen",
+                        "semanticVersion": __version__,
+                        "rules": list(rules.values()),
+                    },
+                },
+                "results": results,
+            },
+        ],
+    }
+    return json.dumps(sarif_log, indent=2, sort_keys=True) + "\n"
+
+
+def _rule_id_for_issue(issue: str, report: ScoreReport) -> str:
+    for name in CATEGORY_NAMES:
+        if issue in report.categories[name].issues:
+            return name
+    return "readme_first_screen"
 
 
 def _annotation_message(issue: str, report: ScoreReport) -> str:

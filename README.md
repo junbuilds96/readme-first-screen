@@ -53,6 +53,12 @@ Save machine-readable output for a CI artifact or later processing:
 readme-first-screen --json --out artifacts/readme-first-screen.json README.md
 ```
 
+Write SARIF for code scanning consumers:
+
+```bash
+readme-first-screen --sarif --out artifacts/readme-first-screen.sarif README.md
+```
+
 Gate CI on a minimum score:
 
 ```bash
