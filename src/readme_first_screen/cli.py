@@ -5,6 +5,7 @@ import json
 from pathlib import Path
 import sys
 from typing import Any
+from urllib.parse import urlparse
 
 from . import __version__
 from .input import ReadmeInputError, load_readme
@@ -67,6 +68,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Write the rendered report to PATH instead of printing it to stdout.",
     )
     parser.add_argument(
+        "--github-annotations",
+        action="store_true",
+        help=(
+            "Emit GitHub Actions warning annotations for top README first-screen "
+            "issues to stderr."
+        ),
+    )
+    parser.add_argument(
         "--fail-under",
         metavar="N",
         type=fail_under_threshold,
@@ -100,6 +109,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("--fix-plan cannot be used with --summary")
 
     if args.batch is not None:
+        if args.github_annotations:
+            parser.error("--github-annotations cannot be used with --batch")
         if args.fix_plan:
             parser.error("--fix-plan cannot be used with --batch")
         if args.source is not None:
@@ -143,6 +154,8 @@ def main(argv: list[str] | None = None) -> int:
             rendered_output += render_summary(report) + "\n"
 
     write_or_print(rendered_output, args.out)
+    if args.github_annotations:
+        emit_github_annotations(report, args.source)
 
     if args.fail_under is not None and report.total_score < args.fail_under:
         return 1
@@ -248,6 +261,90 @@ def write_or_print(rendered_output: str, output_path_value: str | None) -> None:
         print(f"Wrote report to {output_path_value}")
     else:
         print(rendered_output, end="")
+
+
+def emit_github_annotations(
+    report: ScoreReport,
+    original_source: str,
+    *,
+    limit: int = 5,
+) -> None:
+    file_path = report.source if _is_local_file_source(original_source) else None
+    for issue in report.issues[:limit]:
+        properties = {}
+        if file_path is not None:
+            properties["file"] = file_path
+            properties["line"] = str(_annotation_line(issue, report.metadata))
+        properties["title"] = "README first-screen issue"
+        property_text = ",".join(
+            f"{name}={_escape_github_property(value)}"
+            for name, value in properties.items()
+        )
+        message = _annotation_message(issue, report)
+        print(
+            f"::warning {property_text}::{_escape_github_message(message)}",
+            file=sys.stderr,
+        )
+
+
+def _annotation_message(issue: str, report: ScoreReport) -> str:
+    suggestion = _suggestion_for_issue(issue, report)
+    if suggestion is None:
+        return issue
+    return f"{issue} Suggested fix: {suggestion}"
+
+
+def _suggestion_for_issue(issue: str, report: ScoreReport) -> str | None:
+    for category in report.categories.values():
+        if issue not in category.issues or not category.suggestions:
+            continue
+        issue_index = list(category.issues).index(issue)
+        if issue_index < len(category.suggestions):
+            return category.suggestions[issue_index]
+        return category.suggestions[0]
+    if report.suggestions:
+        return report.suggestions[0]
+    return None
+
+
+def _annotation_line(issue: str, metadata: dict[str, Any]) -> int:
+    issue_lower = issue.lower()
+    if any(
+        token in issue_lower
+        for token in ("explanation", "value", "definition", "problem", "outcome")
+    ):
+        return int(metadata.get("first_explanation_line") or 1)
+    if any(token in issue_lower for token in ("command", "quick start", "usage", "run")):
+        return int(metadata.get("first_command_line") or 1)
+    if any(
+        token in issue_lower
+        for token in ("heading", "project name", "project-name", "h1")
+    ):
+        return int(metadata.get("first_heading_line") or 1)
+    return 1
+
+
+def _is_local_file_source(source: str) -> bool:
+    if source == "-":
+        return False
+    parsed = urlparse(source)
+    return not (parsed.scheme in {"http", "https"} and bool(parsed.netloc))
+
+
+def _escape_github_message(value: str) -> str:
+    return (
+        value.replace("%", "%25")
+        .replace("\r", "%0D")
+        .replace("\n", "%0A")
+    )
+
+
+def _escape_github_property(value: str) -> str:
+    return (
+        _escape_github_message(value)
+        .replace(":", "%3A")
+        .replace(",", "%2C")
+    )
 
 
 def build_comparison(

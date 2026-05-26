@@ -150,6 +150,73 @@ def test_cli_json_output(tmp_path):
     }
 
 
+def test_cli_github_annotations_emit_warnings_to_stderr(tmp_path):
+    readme = tmp_path / "README,weak.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--github-annotations", str(readme))
+    annotation_lines = result.stderr.splitlines()
+
+    assert result.returncode == 0
+    assert "README first-screen score:" in result.stdout
+    assert len(annotation_lines) == 5
+    assert all(line.startswith("::warning ") for line in annotation_lines)
+    assert all(f"file={str(readme).replace(',', '%2C')}" in line for line in annotation_lines)
+    assert any("line=1" in line for line in annotation_lines)
+    assert "The first screen does not clearly say what the project is." in result.stderr
+    assert "Suggested fix:" in result.stderr
+
+
+def test_cli_github_annotations_keep_json_stdout_parseable(tmp_path):
+    readme = tmp_path / "README.md"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--json", "--github-annotations", str(readme))
+    data = json.loads(result.stdout)
+
+    assert result.returncode == 0
+    assert data["source"] == str(readme)
+    assert data["total_score"] < 100
+    assert result.stderr.startswith("::warning ")
+
+
+def test_cli_github_annotations_with_out_keep_stdout_message(tmp_path):
+    readme = tmp_path / "README.md"
+    out = tmp_path / "report.txt"
+    readme.write_text(WEAK_README, encoding="utf-8")
+
+    result = run_cli("--github-annotations", "--out", str(out), str(readme))
+
+    assert result.returncode == 0
+    assert result.stdout == f"Wrote report to {out}\n"
+    assert "README first-screen score:" in out.read_text(encoding="utf-8")
+    assert result.stderr.startswith("::warning ")
+
+
+def test_cli_github_annotations_from_stdin_do_not_include_file_or_line():
+    result = run_cli("--github-annotations", "-", input_text=WEAK_README)
+    annotation_lines = result.stderr.splitlines()
+
+    assert result.returncode == 0
+    assert "Source: stdin" in result.stdout
+    assert annotation_lines
+    assert all("file=" not in line for line in annotation_lines)
+    assert all("line=" not in line for line in annotation_lines)
+
+
+def test_cli_github_annotations_reject_batch(tmp_path):
+    readme = tmp_path / "README.md"
+    batch = tmp_path / "batch.txt"
+    readme.write_text(README, encoding="utf-8")
+    batch.write_text(f"{readme}\n", encoding="utf-8")
+
+    result = run_cli("--github-annotations", "--batch", str(batch))
+
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "--github-annotations cannot be used with --batch" in result.stderr
+
+
 def test_cli_single_summary_output(tmp_path):
     readme = tmp_path / "README.md"
     readme.write_text(WEAK_README, encoding="utf-8")
